@@ -21,18 +21,19 @@ src/
   shared/   -> ReplicatedStorage.Shared
     Types.luau            Contrats de données (PlayerData, TileState, ClientState…)
     Net.luau              Noms et accès aux RemoteEvents
-    Config/               GameConfig, PlantConfig, MutationConfig (gelées)
+    Config/               GameConfig, PlantConfig, MutationConfig, DroneConfig (gelées)
     Util/                 Logique pure : BigNum, Format, Growth, Economy, Inventory, MutationRoll,
-                          DataSchema, Resets, FarmLayout, ClientView, Signal, Deep, SessionLock, SlotAllocator
+                          DataSchema, Resets, FarmLayout, ClientView, Signal, Deep, SessionLock, SlotAllocator,
+                          HarvestRules, DroneLogic
   server/   -> ServerScriptService.Server
     init.server.luau      Bootstrap des services
     Config/MutationOdds   Poids de mutation (jamais répliqués)
     Infra/                DataStoreAdapter, RateLimiter, Notifier
     Services/             DataService, EconomyService, PlantService, MutationService, FarmService, HarvestService,
-                          SyncService
+                          DroneService, SyncService
   client/   -> StarterPlayer.StarterPlayerScripts.Client
     init.client.luau      Bootstrap des contrôleurs
-    Controllers/          StateController, PlantRenderer, HarvestController, HudController
+    Controllers/          StateController, PlantRenderer, HarvestController, HudController, DroneRenderer
     UI/                   Theme, Builder
     Visuals/              PlantVisuals (modèles procéduraux)
 tests/
@@ -46,21 +47,23 @@ tests/
 Graphe de dépendances (acyclique, ordre de démarrage) :
 
 ```
-DataService ─┬─> EconomyService ──> PlantService ──> FarmService ──> HarvestService
+DataService ─┬─> EconomyService ──> PlantService ──> FarmService ──> HarvestService ──> DroneService
              └─> SyncService              MutationService ──┘
 ```
-(`MutationService` ne dépend que de configurations : `MutationOdds`, `MutationConfig`, `MutationRoll`.)
+(`MutationService` ne dépend que de configurations : `MutationOdds`, `MutationConfig`, `MutationRoll`.
+`DroneService` dépend de `HarvestService`, `FarmService`, `EconomyService` et `DataService` ; rien ne dépend de lui.)
 
 | Service | Responsabilité | API publique principale |
 |---|---|---|
 | **DataService** | Chargement/sauvegarde, verrou de session, autosave, migrations | `GetData`, `Update`, `IsLoaded`, `SaveNow`, signaux `ProfileLoaded`, `ProfileReleasing`, `Changed` |
 | **EconomyService** | Coins, vente du sac | `AddCoins`, `TrySpendCoins`, `SellAll` |
 | **PlantService** | Graines (déblocage, sélection), durée de pousse effective | `GetSelectedSeed`, `ComputeGrowTime`, `UnlockSeed`, `SelectSeed` |
-| **FarmService** | Parcelles (attribution, construction), état des cases, replantation | `PlantTile`, `GetTilePart`, `OwnsTile`, `GetPlot` |
-| **HarvestService** | Validation et exécution des récoltes, bonus de précision, notification des mutations ≥ ×8 | `Harvest` |
+| **FarmService** | Parcelles (attribution, construction), état des cases, replantation | `PlantTile`, `GetTilePart`, `OwnsTile`, `GetPlotModel`, `GetPlotOrigin`, signal `PlotReady` |
+| **HarvestService** | Récoltes joueur et drone (règles communes `HarvestRules`), bonus de précision (joueur seulement), notification des mutations ≥ ×8 | `Harvest`, `HarvestForDrone` |
 | **SyncService** | Réplication de l'état joueur (coalescée, ≤ 10 Hz) | — |
 | **MutationService** | Tirage pondéré exclusif d'une mutation par plantation (`Random` serveur, poids `MutationOdds`) ; valide la configuration au démarrage | `Roll` |
-| *AutomationService* | Phase 4 | |
+| **DroneService** | Station d'achat (ProximityPrompt serveur, propriétaire seulement), flotte sauvegardée (`machines.drones`), **une** boucle serveur pour tous les drones, ancres `FarmDrone` | `Buy` |
+| *AutomationService* | Phase 4 (drones collecteurs, vente auto, hors ligne) | |
 | *RebirthService, PrestigeService* | Phase 5 | |
 | *PurchaseService* | Phase 6 | |
 
@@ -76,11 +79,13 @@ traitement des joueurs). `DataService.Start` est appelé en **dernier** pour que
 | `SelectSeed` | C→S | `plantId: string` | type, 4 req/s, graine débloquée |
 | `ClientReady` | C→S | — | 1 req/s ; si profil chargé : renvoi de `LoadStatus` + `StateSync` (rattrape les événements émis avant la connexion des écouteurs) |
 | `StateSync` | S→C | `ClientState` | — |
-| `HarvestResult` | S→C | `{ tileId, plantId, mutation, tier, bonus }` | — |
+| `HarvestResult` | S→C | `{ tileId, plantId, mutation, tier, bonus, source }` (`source` : `"player"` / `"drone"`) | — |
 | `Notify` | S→C | `{ kind, text }` | — |
 | `LoadStatus` | S→C | `{ status, message }` | — |
 
 La vente passe par un `ProximityPrompt` serveur (le moteur valide la distance) avec un délai anti-spam.
+L'achat de drones aussi (station de la parcelle, appui de 0,4 s, propriétaire seulement, 2 achats/s) : aucun remote
+d'achat n'existe, le client ne peut fournir ni prix ni quantité.
 Aucune `RemoteFunction` serveur→client.
 
 ## 5. État des cases et rendu
@@ -96,6 +101,13 @@ Aucune `RemoteFunction` serveur→client.
   à partir de la donnée serveur (jamais de l'attribut) ; la vente applique `valeurBase × multiplicateur`.
   Le client ne fait qu'afficher : style 3D (`PlantVisuals`), invite « Carotte · Brillante ×2 », texte flottant.
   Modifier l'attribut côté client ne change que l'affichage local (vérifié en Studio).
+- **Drones (Phase 2)** : `DroneService` lit `machines.drones`, place un point d'attente local par drone
+  (`DroneLogic.homePosition`) et, toutes les 0,25 s, fait agir chaque drone dont l'`interval` est écoulé :
+  `DroneLogic.selectTargets` (cases mûres, débloquées, à portée, la plus ancienne d'abord, non réservées pendant le
+  tick) → `HarvestService.HarvestForDrone`. `HarvestRules.check` puis `apply` s'exécutent dans le même mutateur
+  synchrone de `DataService.Update` : un joueur et un drone ne peuvent jamais récolter deux fois la même culture.
+  Le serveur n'écrit que des attributs sur des ancres invisibles (`Status`, `TargetTile`, `ActionAt`) ; `DroneRenderer`
+  anime localement vol, pales, aller-retour et bulle « Sac plein ! ». Ajouter un type = une entrée de `DroneConfig`.
 
 ## 6. Temps, croissance, hors ligne
 

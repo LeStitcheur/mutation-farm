@@ -3,6 +3,7 @@
 -- Règle : toute évolution du schéma incrémente VERSION et ajoute une entrée dans MIGRATIONS (+ test).
 
 local Types = require(script.Parent.Parent.Types)
+local DroneConfig = require(script.Parent.Parent.Config.DroneConfig)
 local GameConfig = require(script.Parent.Parent.Config.GameConfig)
 local PlantConfig = require(script.Parent.Parent.Config.PlantConfig)
 local MutationConfig = require(script.Parent.Parent.Config.MutationConfig)
@@ -182,6 +183,18 @@ function DataSchema.sanitize(data: PlayerData): { string }
 	if not data.seeds.unlocked[data.seeds.selected] then
 		data.seeds.selected = GameConfig.StarterSeed
 		table.insert(notes, "graine sélectionnée invalide -> graine de départ")
+	end
+
+	-- Drones : types connus, nombres entiers strictement positifs, plafonnés à maxOwned.
+	for droneId, count in data.machines.drones do
+		local def = DroneConfig.get(droneId)
+		if not def or not isNonNegativeInteger(count) or count == 0 then
+			data.machines.drones[droneId] = nil
+			table.insert(notes, "drone invalide retiré : " .. tostring(droneId))
+		elseif count > def.maxOwned then
+			data.machines.drones[droneId] = def.maxOwned
+			table.insert(notes, "drones plafonnés : " .. droneId)
+		end
 	end
 
 	-- Compteurs.

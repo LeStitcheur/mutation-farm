@@ -184,6 +184,9 @@ local function onHarvestResult(result: Types.HarvestResult)
 	local text = if result.tier ~= "normal" and not BigNum.isZero(bonus)
 		then string.format("%s +%s", style.text, Format.bigNum(bonus))
 		else "+1 " .. (if plant then plant.name else "récolte")
+	if result.source == "drone" then
+		text = "Drone : " .. text
+	end
 	-- Mutation (décidée par le serveur) : ligne dédiée, dans la couleur de la mutation.
 	local mutation = mutatedDef(result.mutation)
 	if mutation then

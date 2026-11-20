@@ -14,6 +14,7 @@ local StateController = require(Controllers.StateController)
 local HudController = require(Controllers.HudController)
 local PlantRenderer = require(Controllers.PlantRenderer)
 local HarvestController = require(Controllers.HarvestController)
+local DroneRenderer = require(Controllers.DroneRenderer)
 
 type Controller = {
 	Init: () -> (),
@@ -25,6 +26,7 @@ local ordered: { Controller } = {
 	HudController,
 	PlantRenderer,
 	HarvestController,
+	DroneRenderer,
 }
 
 for _, controller in ordered do

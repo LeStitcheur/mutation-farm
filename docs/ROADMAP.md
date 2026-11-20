@@ -39,9 +39,15 @@ et versionné (commit/tag Git). Pas de développement simultané de plusieurs sy
 - [ ] Hors périmètre du cahier des charges Phase 2, reportés : Mutation Essence, Mutadex, Pluie mutagène, annonce
       serveur de la Divine
 
-**Jalon B — Drones récolteurs** (avancés depuis la Phase 4, après validation du jalon A)
-- [ ] Achat en Coins, attribution aux parcelles, récolte auto sans bonus, mêmes validations que la récolte manuelle
-- [ ] Sac plein, pas de double gain drone/joueur, sauvegarde, architecture multi-types, simulation de revenus
+**Jalon B — Drones récolteurs ✅ (2026-11-20, avancés depuis la Phase 4)**
+- [x] Station d'achat par parcelle (Coins, propriétaire seulement), flotte sauvegardée dans `machines.drones`
+- [x] Récolte automatique via les mêmes validations serveur que le joueur, sans bonus de précision, mutation conservée
+- [x] Sac plein (attente sans perte, bulle, notification), aucun double gain joueur/drone (validation atomique)
+- [x] Animation client (vol, pales, aller-retour), architecture multi-types pilotée par `DroneConfig`
+- [x] Simulation manuel vs drones (`docs/ECONOMY.md` §7), tests Lune + validation Studio MCP (`docs/TESTING.md` §2.3)
+- [ ] Décision d'équilibrage : avec la Tomate, un drone remplace des récoltes « Parfait » d'un joueur attentif
+      (−3 %) — option délai de grâce à trancher (Phase 3)
+- [ ] Manuel : station à 2 joueurs, 3ᵉ drone, persistance réelle de la flotte, station au toucher et à la manette
 
 ## Phase 3 — Croissance de la ferme
 - [ ] Améliorations normales (vitesse, valeur, sac) — UpgradeService + UI

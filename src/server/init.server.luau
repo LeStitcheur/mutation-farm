@@ -14,6 +14,7 @@ local PlantService = require(Services.PlantService)
 local MutationService = require(Services.MutationService)
 local FarmService = require(Services.FarmService)
 local HarvestService = require(Services.HarvestService)
+local DroneService = require(Services.DroneService)
 local SyncService = require(Services.SyncService)
 
 type Service = {
@@ -30,6 +31,7 @@ local ordered: { { name: string, service: Service } } = {
 	{ name = "MutationService", service = MutationService },
 	{ name = "FarmService", service = FarmService },
 	{ name = "HarvestService", service = HarvestService },
+	{ name = "DroneService", service = DroneService },
 	{ name = "SyncService", service = SyncService },
 	{ name = "DataService", service = DataService },
 }

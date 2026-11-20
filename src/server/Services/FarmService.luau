@@ -12,6 +12,7 @@ local Shared = ReplicatedStorage.Shared
 local MutationConfig = require(Shared.Config.MutationConfig)
 local Types = require(Shared.Types)
 local FarmLayout = require(Shared.Util.FarmLayout)
+local Signal = require(Shared.Util.Signal)
 local SlotAllocator = require(Shared.Util.SlotAllocator)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
@@ -45,7 +46,10 @@ local plots: { [Player]: PlotRecord } = {}
 local slots: SlotAllocator.SlotAllocator<Player> = SlotAllocator.new(FarmLayout.MaxSlots)
 local farmsFolder: Folder? = nil
 
-local FarmService = {}
+local FarmService = {
+	-- Parcelle construite et plantée (le propriétaire peut jouer) : DroneService y installe station et drones.
+	PlotReady = Signal.new() :: Signal.Signal<Player>,
+}
 
 local function getFarmsFolder(): Folder
 	if farmsFolder then
@@ -343,6 +347,12 @@ function FarmService.GetPlotModel(player: Player): Model?
 	return if record then record.model else nil
 end
 
+-- Repère monde de la parcelle : les positions LOCALES de FarmLayout s'y appliquent (origin * CFrame.new(x, y, z)).
+function FarmService.GetPlotOrigin(player: Player): CFrame?
+	local record = plots[player]
+	return if record then record.origin else nil
+end
+
 local function onProfileLoaded(player: Player, data: PlayerData)
 	if plots[player] or player.Parent ~= Players then
 		return
@@ -369,6 +379,7 @@ local function onProfileLoaded(player: Player, data: PlayerData)
 		return
 	end
 	ensurePlanted(player)
+	FarmService.PlotReady:Fire(player)
 	teleportToPlot(player)
 end
 

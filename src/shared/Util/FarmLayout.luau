@@ -46,6 +46,9 @@ local FarmLayout = {
 		sellStand = { x = 14, y = 1, z = 26 } :: Vec3,
 		sign = { x = -14, y = 1, z = 26 } :: Vec3,
 		spawn = { x = 0, y = 4, z = 36 } :: Vec3,
+		droneStation = { x = -32, y = 1, z = 26 } :: Vec3, -- station d'achat des drones (avant gauche)
+		droneHome = { x = 0, y = 9, z = 0 } :: Vec3, -- point d'attente central des drones (au-dessus de « main »)
+		droneSpacing = 6, -- écart entre les points d'attente de deux drones (studs)
 	},
 }
 

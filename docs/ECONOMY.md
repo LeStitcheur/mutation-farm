@@ -78,6 +78,9 @@ Règles :
    somment à 1 ; E(1) = 1,5051 ∈ [1,4 ; 1,6] (avant Phase 2 : [1,1 ; 1,3]).
 7. La croissance du coût de rebirth (×6) dépasse celle du multiplicateur (×1,5) : chaque rebirth est plus long.
 8. Production hors ligne plafonnée à 7 200 s.
+9. Les drones ne touchent jamais de bonus de précision, ne dépassent jamais la production de la ferme ni la capacité
+   du sac, et ne réduisent jamais les **ventes** du joueur (simulation, §7).
+10. Le premier drone se rembourse en ≤ 30 min là où il rapporte (Carotte en jeu actif, joueur absent qui vend).
 
 ## 6. Grands nombres
 
@@ -86,3 +89,48 @@ Règles :
 - Au-delà : 15 chiffres significatifs (erreur relative < 10⁻¹⁴), pas de dépassement avant 10^(2⁵³).
 - Sérialisation DataStore directe (`{ m = ..., e = ... }`), affichage `1.23K … 1.23Dc` puis notation scientifique.
 - Affichage **tronqué** (jamais arrondi vers le haut) : le joueur ne voit jamais un solde supérieur au réel.
+
+## 7. Drones récolteurs (Phase 2, jalon B)
+
+Paramètres par type (`src/shared/Config/DroneConfig.luau`) et globaux (`GameConfig.Drones`) :
+
+| Paramètre | Drone récolteur | Rôle |
+|---|---|---|
+| `price` / `priceGrowth` | 1 500 / ×2,5 | prix du n-ième exemplaire = `floor(1 500 × 2,5ⁿ)` → 1 500, 3 750, 9 375 |
+| `maxOwned` | 3 | exemplaires par joueur |
+| `interval` | 4 s | délai entre deux actions d'un drone |
+| `capacity` | 1 | plantes récoltées par action |
+| `range` | 25 studs | portée horizontale autour de son point d'attente (couvre la parcelle principale, pas les extensions) |
+| `TickInterval` | 0,25 s | cadence de l'unique boucle serveur des drones |
+| `BagFullNoticeInterval` | 30 s | « Tes drones attendent : sac plein » au plus une fois par 30 s |
+
+Règles : récolte via les mêmes validations serveur que le joueur (propriété, maturité, portée, sac) ; **aucun bonus de
+précision** ; mutation conservée ; sac plein = attente sans perte ; validation et application atomiques (aucun double
+gain joueur/drone) ; drones actifs uniquement quand le joueur est en ligne (hors ligne : Phase 4).
+
+### Simulation des revenus (`tests/specs/DroneEconomy.spec.luau`, 10 min, 9 cases, Coins/min)
+
+Joueur « attentif » : récolte la case mûre la plus ancienne avec 1,2 s de déplacement, vend sac plein (aller-retour
+8 s) ; valeur de vente = espérance des mutations (×1,5051) ; mêmes modules que le serveur (`HarvestRules`, `DroneLogic`).
+
+| Scénario | Carotte | Tomate |
+|---|---|---|
+| Joueur attentif seul | 650 | 3 123 |
+| + 1 drone | 847 (+30 %) | 3 029 (−3 %) |
+| + 3 drones | 1 117 (+72 %) | 3 171 (+2 %) |
+| 1 drone seul (joueur absent qui vient vendre) | 181 | 813 |
+| 3 drones seuls | 542 | 2 438 |
+
+Lecture :
+- Le drone rapporte quand la ferme produit plus vite que le joueur ne récolte (Carotte : 1,5 récolte/s contre 0,83/s
+  pour le joueur) : premier drone remboursé en ≈ 7,6 min de jeu actif.
+- Avec la Tomate (0,75 récolte/s, déjà absorbée par un joueur attentif), le drone **prend des récoltes que le joueur
+  aurait faites avec un bonus Parfait** : les ventes restent identiques (24 381), seuls les bonus baissent
+  (6 847 → 5 911). Effet direct de « aucun bonus pour les drones ».
+- Pour un joueur absent qui vient vendre, le premier drone se rembourse en ≈ 8 min (Carotte) / ≈ 2 min (Tomate).
+- Sans personne pour vendre, les drones s'arrêtent dès que le sac est plein (40 objets ≈ 53 s à 3 drones sur Tomate) :
+  la vente automatique relève de la Phase 4.
+
+Pistes d'équilibrage (non implémentées, décision de design) : délai de grâce (le drone n'attaque une plante qu'après
+la fenêtre « Bien » de 5 s, pour laisser les bonus au joueur), drones ciblant en priorité les cases éloignées du
+joueur, prix ou intervalle ajustés au rééquilibrage Phase 3.

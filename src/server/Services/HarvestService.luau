@@ -1,7 +1,10 @@
 --!strict
--- HarvestService — récolte manuelle validée côté serveur : propriété, maturité (horloge serveur),
--- distance, capacité du sac ; bonus de précision ; replantation automatique.
--- API : Harvest.
+-- HarvestService — récoltes validées côté serveur, communes au joueur et aux drones : propriété, maturité
+-- (horloge serveur), proximité (personnage du joueur ou portée du drone), capacité du sac ; bonus de précision
+-- pour le joueur seulement ; replantation automatique (nouveau tirage de mutation).
+-- Anti-duplication : la validation est REFAITE puis appliquée dans le même mutateur synchrone (HarvestRules),
+-- donc un joueur et un drone ne peuvent jamais récolter deux fois la même culture.
+-- API : Harvest (joueur), HarvestForDrone (DroneService).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -12,9 +15,9 @@ local MutationConfig = require(Shared.Config.MutationConfig)
 local PlantConfig = require(Shared.Config.PlantConfig)
 local Types = require(Shared.Types)
 local BigNum = require(Shared.Util.BigNum)
-local Economy = require(Shared.Util.Economy)
-local Growth = require(Shared.Util.Growth)
-local Inventory = require(Shared.Util.Inventory)
+local DroneLogic = require(Shared.Util.DroneLogic)
+local FarmLayout = require(Shared.Util.FarmLayout)
+local HarvestRules = require(Shared.Util.HarvestRules)
 local Net = require(Shared.Net)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
@@ -22,7 +25,14 @@ local FarmService = require(script.Parent.FarmService)
 local Notifier = require(script.Parent.Parent.Infra.Notifier)
 local RateLimiter = require(script.Parent.Parent.Infra.RateLimiter)
 
-export type HarvestFailure = "not_loaded" | "invalid_tile" | "empty" | "not_ripe" | "too_far" | "bag_full"
+export type HarvestFailure =
+	"not_loaded"
+	| "invalid_tile"
+	| "empty"
+	| "not_ripe"
+	| "too_far"
+	| "out_of_range"
+	| "bag_full"
 
 local MAX_TILE_ID_LENGTH = 32
 
@@ -30,7 +40,7 @@ local limiter = RateLimiter.new(GameConfig.Harvest.RequestsPerSecond)
 
 local HarvestService = {}
 
-local function isNear(player: Player, part: BasePart): boolean
+local function isCharacterNear(player: Player, part: BasePart): boolean
 	local character = player.Character
 	local root = if character then character:FindFirstChild("HumanoidRootPart") else nil
 	if not root or not root:IsA("BasePart") then
@@ -39,7 +49,34 @@ local function isNear(player: Player, part: BasePart): boolean
 	return (root.Position - part.Position).Magnitude <= GameConfig.Harvest.MaxDistance
 end
 
-function HarvestService.Harvest(player: Player, tileId: string): (boolean, HarvestFailure?)
+local function notifyBagFull(player: Player, source: Types.HarvestSource)
+	if source == "player" then
+		Notifier.sendThrottled(
+			player,
+			"bag_full",
+			GameConfig.Harvest.BagFullNoticeInterval,
+			"error",
+			"Sac plein ! Va vendre au marché."
+		)
+	else
+		Notifier.sendThrottled(
+			player,
+			"drone_bag_full",
+			GameConfig.Drones.BagFullNoticeInterval,
+			"info",
+			"Tes drones attendent : sac plein ! Va vendre au marché."
+		)
+	end
+end
+
+-- Récolte commune. `isNear` : proximité propre à la source (personnage ou portée du drone).
+local function harvest(
+	player: Player,
+	tileId: string,
+	source: Types.HarvestSource,
+	isNear: (BasePart) -> boolean,
+	farFailure: HarvestFailure
+): (boolean, HarvestFailure?)
 	local data = DataService.GetData(player)
 	if not data then
 		return false, "not_loaded"
@@ -48,58 +85,47 @@ function HarvestService.Harvest(player: Player, tileId: string): (boolean, Harve
 	if not part or not FarmService.OwnsTile(player, tileId) then
 		return false, "invalid_tile"
 	end
-	local tile = data.farm.tiles[tileId]
-	if not tile then
-		return false, "empty"
-	end
 	local now = Workspace:GetServerTimeNow()
-	if not Growth.isRipe(tile, now) then
-		return false, "not_ripe"
+	-- Annotation explicite : sans elle, l'inférence élargit l'union de littéraux en `string`.
+	local valid: boolean, failure: HarvestRules.Failure? = HarvestRules.check(data, tileId, now)
+	if not valid and failure ~= "bag_full" then
+		return false, failure
 	end
-	if not isNear(player, part) then
-		return false, "too_far"
+	if not isNear(part) then
+		return false, farFailure
 	end
-	local capacity = Economy.bagCapacity(data)
-	if Inventory.isFull(data.bag.items, capacity) then
-		Notifier.sendThrottled(
-			player,
-			"bag_full",
-			GameConfig.Harvest.BagFullNoticeInterval,
-			"error",
-			"Sac plein ! Va vendre au marché."
-		)
+	if failure == "bag_full" then
+		notifyBagFull(player, source)
 		return false, "bag_full"
 	end
 
-	local plantId = tile.plantId
-	local mutation = tile.mutation or MutationConfig.NORMAL
-	local tier: Types.PrecisionTier = Growth.precisionTier(now - Growth.ripeAt(tile))
-	local bonus = Economy.precisionBonus(plantId, tier)
-	local key = Economy.itemKey(plantId, mutation)
-
+	-- Revalidation + application atomiques (aucun yield entre les deux).
+	local outcome: HarvestRules.Outcome? = nil
 	DataService.Update(player, function(d)
-		Inventory.add(d.bag.items, key, 1, capacity)
-		d.stats.harvests += 1
-		if tier == "perfect" then
-			d.stats.perfectHarvests += 1
+		if HarvestRules.check(d, tileId, now) then
+			outcome = HarvestRules.apply(d, tileId, now, source)
 		end
-		d.farm.tiles[tileId] = nil
 	end)
-	if not BigNum.isZero(bonus) then
-		EconomyService.AddCoins(player, bonus)
+	local result = outcome
+	if not result then
+		return false, "not_ripe"
+	end
+	if not BigNum.isZero(result.bonus) then
+		EconomyService.AddCoins(player, result.bonus)
 	end
 	FarmService.PlantTile(player, tileId)
 
-	local result: Types.HarvestResult = {
+	local payload: Types.HarvestResult = {
 		tileId = tileId,
-		plantId = plantId,
-		mutation = mutation,
-		tier = tier,
-		bonus = bonus,
+		plantId = result.plantId,
+		mutation = result.mutation,
+		tier = result.tier,
+		bonus = result.bonus,
+		source = source,
 	}
-	Net.event(Net.Events.HarvestResult):FireClient(player, result)
-	local mutationDef = MutationConfig.get(mutation)
-	local plant = PlantConfig.get(plantId)
+	Net.event(Net.Events.HarvestResult):FireClient(player, payload)
+	local mutationDef = MutationConfig.get(result.mutation)
+	local plant = PlantConfig.get(result.plantId)
 	if mutationDef and plant and mutationDef.multiplier >= GameConfig.Mutations.NotifyMinMultiplier then
 		Notifier.send(
 			player,
@@ -108,6 +134,25 @@ function HarvestService.Harvest(player: Player, tileId: string): (boolean, Harve
 		)
 	end
 	return true, nil
+end
+
+-- Récolte manuelle (requête du client) : le personnage doit être à portée de la case.
+function HarvestService.Harvest(player: Player, tileId: string): (boolean, HarvestFailure?)
+	return harvest(player, tileId, "player", function(part: BasePart): boolean
+		return isCharacterNear(player, part)
+	end, "too_far")
+end
+
+-- Récolte par un drone du joueur : la case doit être à portée de son point d'attente (coordonnées locales).
+function HarvestService.HarvestForDrone(
+	player: Player,
+	tileId: string,
+	home: FarmLayout.Vec3,
+	range: number
+): (boolean, HarvestFailure?)
+	return harvest(player, tileId, "drone", function(_part: BasePart): boolean
+		return DroneLogic.inRange(home, tileId, range)
+	end, "out_of_range")
 end
 
 function HarvestService.Init()

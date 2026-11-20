@@ -89,12 +89,15 @@ export type ClientState = {
 	perfectHarvests: number,
 }
 
+export type HarvestSource = "player" | "drone"
+
 export type HarvestResult = {
 	tileId: TileId,
 	plantId: PlantId,
 	mutation: MutationId,
 	tier: PrecisionTier,
 	bonus: BigNum,
+	source: HarvestSource,
 }
 
 export type NotifyKind = "info" | "success" | "error"
@@ -124,5 +127,20 @@ export type MutationDef = {
 }
 
 export type MutationWeight = { id: MutationId, weight: number }
+
+-- Type de drone (Config/DroneConfig). Nombre possédé : PlayerData.machines.drones[id].
+export type DroneDef = {
+	id: string,
+	order: number,
+	name: string,
+	description: string,
+	price: number, -- prix du premier exemplaire (Coins)
+	priceGrowth: number, -- prix × priceGrowth par exemplaire déjà possédé
+	maxOwned: number,
+	interval: number, -- secondes entre deux actions
+	capacity: number, -- plantes récoltées par action
+	range: number, -- portée horizontale (studs) autour du point d'attente
+	color: string, -- "#RRGGBB" (corps du drone)
+}
 
 return {}

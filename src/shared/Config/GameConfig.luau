@@ -25,6 +25,13 @@ local GameConfig = {
 		NotifyMinMultiplier = 8, -- notification à la récolte à partir de Cristallisée (×8)
 	},
 
+	-- Réglages globaux des drones (réglages par type : Config/DroneConfig).
+	Drones = {
+		TickInterval = 0.25, -- cadence de l'unique boucle serveur des drones (s)
+		BagFullNoticeInterval = 30, -- « Tes drones attendent : sac plein » au plus toutes les N secondes
+		BuyRequestsPerSecond = 2,
+	},
+
 	Sell = {
 		Cooldown = 0.5,
 	},

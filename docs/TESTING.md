@@ -40,6 +40,18 @@ pwsh scripts/check.ps1 -Fix   # applique StyLua puis vérifie le reste
 - `MutationRoll.spec` (10 tests) : bornes cumulées, balayage déterministe exact, E(1) = 1,5051, chance ×3.
   Contrôle de mutation : inverser les poids Astrale/Divine fait échouer 3 tests.
 
+### Ce qui est couvert hors Studio pour les drones (Phase 2, jalon B)
+- `HarvestRules.spec` (9 tests) : validations communes joueur/drone (case verrouillée ou mal formée, vide, pas mûre,
+  sac plein sans perte) ; bonus de précision pour le joueur seulement ; **concurrence** joueur + drone au même instant
+  = une récolte ; **duplication** : 100 tentatives alternées sur un cycle = un seul objet vendu ; reprise après vente
+  avec la mutation conservée. Contrôle de mutation : ne plus vider la case dans `apply` fait échouer 3 tests.
+- `Drones.spec` (12 tests) : configuration valide et gelée ; prix 1 500 / 3 750 / 9 375 ; achat refusé (type inconnu,
+  fonds, maximum) ; flotte plafonnée ; points d'attente centrés et espacés ; portée (parcelle principale couverte,
+  extensions non) ; station sur le socle et à l'écart ; cibles (mûres, plus ancienne d'abord, capacité, réservées,
+  hors portée, parcelle verrouillée) ; sauvegarde/restauration et assainissement de `machines.drones`.
+- `DroneEconomy.spec` (7 tests) : simulation 10 min Carotte/Tomate (§ ECONOMY 7) — sac ≤ 40, aucun bonus drone,
+  récoltes ≤ production, ventes jamais réduites, drones seuls croissants, rentabilité du premier drone, constat Tomate.
+
 ### Ce qui n'est PAS couvert automatiquement
 Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
 → checklist ci-dessous, déroulée via Studio MCP (§3) ; ce qui exige un humain reste marqué comme tel.
@@ -130,6 +142,27 @@ Deux sessions sur le build de la branche `phase-2/mutations-automation` (39 scri
 Défauts trouvés puis corrigés pendant le jalon : Brillante blanc bleuté (reflets du ciel) → or mat `#FFD23F` ;
 Cristallisée et Astrale délavées par le néon → couleurs 3D saturées propres aux styles ; Divine trop proche de la
 Brillante → or néon + halo ; « CRISTALLISéE » (`string.upper` ne gère pas l'UTF-8) → nom affiché tel quel.
+
+### 2.3 Phase 2, jalon B (drones) — validation Studio MCP du 2026-11-20 (Play solo, API désactivée)
+
+Build de la branche `phase-2/mutations-automation` (44 scripts identiques à `src/`, 8 services, console sans erreur).
+Coins gagnés en jouant (aucun crédit de test).
+
+| Contrôle | Statut | Constat |
+|---|---|---|
+| Station d'achat | ✅ | Pavé « DRONES » à l'avant gauche ; invite « Acheter : Drone récolteur / 1.50K Coins · 0/3 », appui 0,4 s |
+| Achat sans fonds | ✅ | « Pas assez de Coins pour ce drone. », aucun drone créé |
+| Achat n°1 puis n°2 | ✅ | 1 660 → 160 puis 4 670 → 928 (−1 500, −3 750) ; « Drone récolteur acheté ! (1/3) » / « (2/3) » ; invite « 3.75K · 1/3 » puis « 9.37K · 2/3 » ; flotte réorganisée (x = −198 et −192, centrée), 2 modèles client exactement |
+| Récolte automatique | ✅ | Joueur à 40 studs : 1 drone = 4 récoltes en 17 s (≈ 4,1 s), 2 drones = 10 récoltes en 20 s sur des cases distinctes ; palier normal, **bonus 0** ; mutations conservées dans le sac |
+| Concurrence joueur/drone | ✅ | Rafale de requêtes manuelles sur les cases mûres pendant que le drone travaille : 26 résultats (25 joueur, 1 drone) = +26 au sac ; récoltes = replantations sur chacune des 9 cases (0 écart) |
+| Sac plein | ✅ | Statut `bag_full`, bulle « Sac plein ! » au-dessus du drone, aucune récolte, notification « Tes drones attendent : sac plein ! Va vendre au marché. » ; reprise dès la vente (statut `working`) |
+| Vente avec récoltes de drone | ✅ | Sac serveur 33 normales + 6 Brillantes + 1 Géante → « +490 Coins » (attendu 490) |
+| Anti-triche manuel avec drones actifs | ✅ | 200 requêtes + entrées invalides sur une case mûre → 1 récolte, 1 replantation |
+| Non-régression | ✅ | Récolte, vente, déblocage Tomate (« Tomate débloquée ! … »), mutations, drones sur Tomate |
+| Station réservée au propriétaire | ⛔ non vérifiable | Exige un 2ᵉ joueur ; vérifié à la lecture du code (`buyer ~= player` → refus) |
+| 3ᵉ drone / invite « Complet » | ⛔ non joué | 9 375 Coins requis ; maximum couvert en Lune (`Drones.spec`) |
+| Persistance réelle de la flotte | ⛔ non vérifiable | Pas d'accès DataStore ; couvert en Lune (`Drones.spec`, `SessionLock.spec`) |
+| Station au toucher / à la manette | ⛔ non vérifiable | ProximityPrompt standard (tactile et ButtonX natifs) ; à contrôler avec l'émulateur et une vraie manette |
 
 ## 3. Studio MCP (opération manuelle, recommandée)
 
