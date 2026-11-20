@@ -27,11 +27,21 @@ et versionné (commit/tag Git). Pas de développement simultané de plusieurs sy
   - [ ] Émulateur téléphone : HUD, invites tactiles, chat ouvert vs bouton Graines sur écran bas (ligne 14)
   - [ ] Vraie manette : sélection auto du 1er bouton et navigation dans le panneau (ligne 15)
 
-## Phase 2 — Mutations
-- [ ] MutationService : tirage pondéré à la plantation (`MutationRoll`, `MutationOdds` serveur)
-- [ ] Visuels de mutation optimisés (matériau/couleur/échelle, particules limitées)
-- [ ] Mutation Essence à la récolte, Mutadex (données + UI)
-- [ ] Événement Pluie mutagène (EventService)
+## Phase 2 — Mutations et automatisation (branche `phase-2/mutations-automation`)
+
+**Jalon A — Mutations ✅ (2026-11-20)**
+- [x] MutationService : tirage pondéré exclusif à la plantation, côté serveur (`MutationRoll`, `MutationOdds`),
+      probabilités du cahier des charges (12 / 5 / 1,5 / 0,4 / 0,08 / 0,01 %), sauvegardé avec la case
+- [x] Multiplicateurs appliqués à la vente ; bonus de précision sur la valeur de base
+- [x] Visuels de mutation optimisés (teinte, matériau, échelle, lumière ≥ Radioactive, ≤ 6 particules/s, halo Divine)
+- [x] Affichage à la récolte (invite, texte flottant coloré, notification ≥ ×8)
+- [x] Tests Lune (distribution χ², exclusivité, multiplicateurs, sauvegarde) + validation Studio MCP (`docs/TESTING.md` §2.2)
+- [ ] Hors périmètre du cahier des charges Phase 2, reportés : Mutation Essence, Mutadex, Pluie mutagène, annonce
+      serveur de la Divine
+
+**Jalon B — Drones récolteurs** (avancés depuis la Phase 4, après validation du jalon A)
+- [ ] Achat en Coins, attribution aux parcelles, récolte auto sans bonus, mêmes validations que la récolte manuelle
+- [ ] Sac plein, pas de double gain drone/joueur, sauvegarde, architecture multi-types, simulation de revenus
 
 ## Phase 3 — Croissance de la ferme
 - [ ] Améliorations normales (vitesse, valeur, sac) — UpgradeService + UI
@@ -40,7 +50,7 @@ et versionné (commit/tag Git). Pas de développement simultané de plusieurs sy
 - [ ] Simulateur d'économie Lune + rééquilibrage
 
 ## Phase 4 — Automatisation
-- [ ] AutomationService : drones récolteurs/collecteurs (simulation agrégée), vente auto
+- [ ] AutomationService : drones collecteurs (simulation agrégée), vente auto (drones récolteurs : Phase 2 jalon B)
 - [ ] Production hors ligne plafonnée à 2 h, écran « Pendant ton absence »
 
 ## Phase 5 — Rebirth & Prestige

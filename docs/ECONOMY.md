@@ -2,7 +2,7 @@
 
 > Source de vérité des valeurs : `src/shared/Config/PlantConfig.luau`, `src/shared/Config/GameConfig.luau`,
 > `src/server/Config/MutationOdds.luau`. Les invariants ci-dessous sont **testés automatiquement**
-> (`tests/specs/Config.spec.luau`, `Economy.spec.luau`, `MutationRoll.spec.luau`).
+> (`tests/specs/Config.spec.luau`, `Economy.spec.luau`, `MutationRoll.spec.luau`, `Mutations.spec.luau`).
 
 ## 1. Plantes (Phase 1, implémenté)
 
@@ -29,22 +29,35 @@ Phase 3** avec un simulateur Lune.
 - **Bonus de précision** (Coins instantanés, arrondis à l'inférieur) :
   Parfait (≤ 1,5 s) = 50 % de la valeur de base, Bien (≤ 5 s) = 20 %.
 
-## 3. Mutations (Phase 2, contrat défini et testé)
+## 3. Mutations (Phase 2, implémenté)
 
-Poids sur 1 000 000 (tirage exclusif), chance `L` appliquée à tous les poids non normaux :
+Tirage **exclusif** côté serveur à chaque plantation (`MutationService`). Poids sur 1 000 000, chance `L`
+appliquée à tous les poids non normaux (`L = 1` en Phase 2) :
 
 | Mutation | × | Poids | P (L = 1) |
 |---|---|---|---|
-| Normale | ×1 | 927 093 | 92,709 % |
-| Brillante | ×2 | 50 000 | 5 % |
-| Géante | ×4 | 16 667 | 1,667 % |
-| Cristallisée | ×8 | 5 000 | 0,5 % |
-| Radioactive | ×20 | 1 000 | 0,1 % |
-| Astrale | ×50 | 200 | 0,02 % |
-| Divine | ×150 | 40 | 0,004 % |
+| Normale | ×1 | 810 100 | 81,01 % |
+| Brillante | ×2 | 120 000 | 12 % |
+| Géante | ×4 | 50 000 | 5 % |
+| Cristallisée | ×8 | 15 000 | 1,5 % |
+| Radioactive | ×20 | 4 000 | 0,4 % |
+| Astrale | ×50 | 800 | 0,08 % |
+| Divine | ×150 | 100 | 0,01 % |
 
-Espérance du multiplicateur : `E(L) = (927 093 + 242 668·L) / (927 093 + 72 907·L)`
-→ E(1) ≈ **1,170**, E(3) ≈ **1,444** (Pluie mutagène).
+Espérance du multiplicateur : `E(L) = (810 100 + 695 000·L) / (810 100 + 189 900·L)`
+→ E(1) = **1,5051**, E(3) ≈ 2,098 (Pluie mutagène, non implémentée).
+
+**Changement de contrat (2026-11-20)** : le cahier des charges Phase 2 a relevé les probabilités (avant : 5 % /
+1,667 % / 0,5 % / 0,1 % / 0,02 % / 0,004 %, E(1) = 1,170). Le revenu moyen par récolte augmente de **×1,286**
+par rapport à l'ancien contrat (×1,505 par rapport à une ferme sans mutation) : les temps de déblocage réels
+raccourcissent d'autant (ex. Carotte → Tomate : 50 s → ≈ 33 s en jeu parfait). À revoir au rééquilibrage Phase 3 ;
+revenir en arrière = modifier les poids de `src/server/Config/MutationOdds.luau` (tests à ajuster).
+
+Règles :
+- La mutation multiplie la **valeur de vente** (`valeurBase × multiplicateur`) ; le bonus de précision reste calculé
+  sur la valeur de **base** (invariant 4).
+- Une récolte ≥ ×8 (Cristallisée et au-delà) déclenche une notification (`GameConfig.Mutations.NotifyMinMultiplier`).
+- Hors périmètre Phase 2 actuel : Mutation Essence, Mutadex, Pluie mutagène, annonce serveur de la Divine.
 
 ## 4. Rebirth et Prestige (Phase 5, formules contractuelles, non branchées au gameplay)
 
@@ -61,7 +74,8 @@ Espérance du multiplicateur : `E(L) = (927 093 + 242 668·L) / (927 093 + 72 90
 3. Le temps de déblocage (jeu parfait, graine précédente, 9 cases) est strictement croissant et compris entre 30 s et 6 h.
 4. Le bonus de précision ne dépasse jamais 50 % de la valeur de base.
 5. Les Coins ne deviennent jamais négatifs : toute dépense passe par `EconomyService.TrySpendCoins`.
-6. Les multiplicateurs de mutation sont exactement 2, 4, 8, 20, 50, 150 ; les probabilités somment à 1 ; E(1) ∈ [1,1 ; 1,3].
+6. Les multiplicateurs de mutation sont exactement 2, 4, 8, 20, 50, 150 ; les probabilités sont celles du §3 et
+   somment à 1 ; E(1) = 1,5051 ∈ [1,4 ; 1,6] (avant Phase 2 : [1,1 ; 1,3]).
 7. La croissance du coût de rebirth (×6) dépasse celle du multiplicateur (×1,5) : chaque rebirth est plus long.
 8. Production hors ligne plafonnée à 7 200 s.
 

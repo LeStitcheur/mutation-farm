@@ -23,12 +23,13 @@ src/
     Net.luau              Noms et accès aux RemoteEvents
     Config/               GameConfig, PlantConfig, MutationConfig (gelées)
     Util/                 Logique pure : BigNum, Format, Growth, Economy, Inventory, MutationRoll,
-                          DataSchema, Resets, FarmLayout, ClientView, Signal, Deep
+                          DataSchema, Resets, FarmLayout, ClientView, Signal, Deep, SessionLock, SlotAllocator
   server/   -> ServerScriptService.Server
     init.server.luau      Bootstrap des services
     Config/MutationOdds   Poids de mutation (jamais répliqués)
     Infra/                DataStoreAdapter, RateLimiter, Notifier
-    Services/             DataService, EconomyService, PlantService, FarmService, HarvestService, SyncService
+    Services/             DataService, EconomyService, PlantService, MutationService, FarmService, HarvestService,
+                          SyncService
   client/   -> StarterPlayer.StarterPlayerScripts.Client
     init.client.luau      Bootstrap des contrôleurs
     Controllers/          StateController, PlantRenderer, HarvestController, HudController
@@ -46,8 +47,9 @@ Graphe de dépendances (acyclique, ordre de démarrage) :
 
 ```
 DataService ─┬─> EconomyService ──> PlantService ──> FarmService ──> HarvestService
-             └─> SyncService
+             └─> SyncService              MutationService ──┘
 ```
+(`MutationService` ne dépend que de configurations : `MutationOdds`, `MutationConfig`, `MutationRoll`.)
 
 | Service | Responsabilité | API publique principale |
 |---|---|---|
@@ -55,9 +57,9 @@ DataService ─┬─> EconomyService ──> PlantService ──> FarmService �
 | **EconomyService** | Coins, vente du sac | `AddCoins`, `TrySpendCoins`, `SellAll` |
 | **PlantService** | Graines (déblocage, sélection), durée de pousse effective | `GetSelectedSeed`, `ComputeGrowTime`, `UnlockSeed`, `SelectSeed` |
 | **FarmService** | Parcelles (attribution, construction), état des cases, replantation | `PlantTile`, `GetTilePart`, `OwnsTile`, `GetPlot` |
-| **HarvestService** | Validation et exécution des récoltes, bonus de précision | `Harvest` |
+| **HarvestService** | Validation et exécution des récoltes, bonus de précision, notification des mutations ≥ ×8 | `Harvest` |
 | **SyncService** | Réplication de l'état joueur (coalescée, ≤ 10 Hz) | — |
-| *MutationService* | Phase 2 | |
+| **MutationService** | Tirage pondéré exclusif d'une mutation par plantation (`Random` serveur, poids `MutationOdds`) ; valide la configuration au démarrage | `Roll` |
 | *AutomationService* | Phase 4 | |
 | *RebirthService, PrestigeService* | Phase 5 | |
 | *PurchaseService* | Phase 6 | |
@@ -74,7 +76,7 @@ traitement des joueurs). `DataService.Start` est appelé en **dernier** pour que
 | `SelectSeed` | C→S | `plantId: string` | type, 4 req/s, graine débloquée |
 | `ClientReady` | C→S | — | 1 req/s ; si profil chargé : renvoi de `LoadStatus` + `StateSync` (rattrape les événements émis avant la connexion des écouteurs) |
 | `StateSync` | S→C | `ClientState` | — |
-| `HarvestResult` | S→C | `{ tileId, plantId, tier, bonus }` | — |
+| `HarvestResult` | S→C | `{ tileId, plantId, mutation, tier, bonus }` | — |
 | `Notify` | S→C | `{ kind, text }` | — |
 | `LoadStatus` | S→C | `{ status, message }` | — |
 
@@ -89,6 +91,11 @@ Aucune `RemoteFunction` serveur→client.
 - Le client (`PlantRenderer`) construit **localement** les modèles de plantes de toutes les parcelles et anime la
   croissance à 10 Hz via `Model:ScaleTo` à partir des attributs → zéro coût serveur par image.
 - Le client (`HarvestController`) crée des `ProximityPrompt` **locaux** sur ses propres cases mûres.
+- **Mutations (Phase 2)** : `FarmService.PlantTile` appelle `MutationService.Roll()` → `tile.mutation` (nil = normale),
+  sauvegardée avec la case puis exposée par l'attribut `Mutation`. La récolte place `"<plante>|<mutation>"` dans le sac
+  à partir de la donnée serveur (jamais de l'attribut) ; la vente applique `valeurBase × multiplicateur`.
+  Le client ne fait qu'afficher : style 3D (`PlantVisuals`), invite « Carotte · Brillante ×2 », texte flottant.
+  Modifier l'attribut côté client ne change que l'affichage local (vérifié en Studio).
 
 ## 6. Temps, croissance, hors ligne
 

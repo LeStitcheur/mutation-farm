@@ -68,12 +68,12 @@ Tirage **pondéré exclusif** à la plantation (un seul résultat), probabilité
 
 | Mutation | Multiplicateur | Probabilité de base | Effet visuel (optimisé) |
 |---|---|---|---|
-| Brillante | ×2 | 5 % | Reflets, légère émission |
-| Géante | ×4 | 1,667 % | Échelle ×1,5 |
-| Cristallisée | ×8 | 0,5 % | Matériau Glass cyan |
-| Radioactive | ×20 | 0,1 % | Vert néon, particules lentes |
-| Astrale | ×50 | 0,02 % | Violet néon, étoiles |
-| Divine | ×150 | 0,004 % | Or néon, halo, annonce serveur |
+| Brillante | ×2 | 12 % | Or mat, petites étincelles |
+| Géante | ×4 | 5 % | Échelle ×1,5 |
+| Cristallisée | ×8 | 1,5 % | Matériau Glass cyan |
+| Radioactive | ×20 | 0,4 % | Vert néon, lumière, particules lentes |
+| Astrale | ×50 | 0,08 % | Violet néon, lumière, particules |
+| Divine | ×150 | 0,01 % | Or néon, halo, lumière, particules (annonce serveur : plus tard) |
 
 Récolter une mutation rapporte de la **Mutation Essence** et l'inscrit au **Mutadex** (plante × mutation, persistant).
 

@@ -11,6 +11,7 @@ local Services = script.Services
 local DataService = require(Services.DataService)
 local EconomyService = require(Services.EconomyService)
 local PlantService = require(Services.PlantService)
+local MutationService = require(Services.MutationService)
 local FarmService = require(Services.FarmService)
 local HarvestService = require(Services.HarvestService)
 local SyncService = require(Services.SyncService)
@@ -26,6 +27,7 @@ Net.event(Net.Events.StateSync)
 local ordered: { { name: string, service: Service } } = {
 	{ name = "EconomyService", service = EconomyService },
 	{ name = "PlantService", service = PlantService },
+	{ name = "MutationService", service = MutationService },
 	{ name = "FarmService", service = FarmService },
 	{ name = "HarvestService", service = HarvestService },
 	{ name = "SyncService", service = SyncService },

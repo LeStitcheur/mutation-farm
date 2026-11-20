@@ -19,6 +19,7 @@ local SCALE_EPSILON = 0.01
 type Record = {
 	tile: BasePart,
 	plantId: string,
+	mutation: string,
 	plantedAt: number,
 	growTime: number,
 	plant: PlantVisuals.PlantModel?,
@@ -64,15 +65,17 @@ local function tileTop(tile: BasePart): CFrame
 	return tile.CFrame * CFrame.new(0, tile.Size.Y / 2, 0)
 end
 
--- Relit les attributs ; reconstruit le modèle si la plante change.
+-- Relit les attributs ; reconstruit le modèle si la plante ou sa mutation change.
 local function refresh(record: Record)
 	record.dirty = false
 	local plantId = readString(record.tile, "PlantId")
-	if plantId ~= record.plantId then
+	local mutation = readString(record.tile, "Mutation")
+	if plantId ~= record.plantId or mutation ~= record.mutation then
 		destroyPlant(record)
 		record.plantId = plantId
+		record.mutation = mutation
 		if plantId ~= "" then
-			local plant = PlantVisuals.build(plantId)
+			local plant = PlantVisuals.build(plantId, mutation)
 			if plant then
 				plant.model.Parent = getContainer()
 				record.plant = plant
@@ -91,7 +94,7 @@ local function updateVisual(record: Record, now: number)
 	end
 	local progress = Growth.progress(record, now)
 	local eased = 1 - (1 - progress) ^ 2
-	local scale = MIN_SCALE + (1 - MIN_SCALE) * eased
+	local scale = (MIN_SCALE + (1 - MIN_SCALE) * eased) * plant.scale
 	if math.abs(scale - record.scale) >= SCALE_EPSILON or (progress >= 1 and record.scale ~= scale) then
 		PlantVisuals.place(plant, tileTop(record.tile), scale)
 		record.scale = scale
@@ -109,6 +112,7 @@ local function addTile(instance: Instance)
 	local record: Record = {
 		tile = instance,
 		plantId = "",
+		mutation = "",
 		plantedAt = 0,
 		growTime = 0,
 		plant = nil,

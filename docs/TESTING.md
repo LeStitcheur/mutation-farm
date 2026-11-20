@@ -31,6 +31,15 @@ pwsh scripts/check.ps1 -Fix   # applique StyLua puis vérifie le reste
 - `SlotAllocator.spec` (7 tests) + `FarmLayout.spec` : un emplacement distinct par joueur, 9ᵉ joueur refusé, jamais deux
   parcelles pour un joueur, libération tardive sans effet sur le nouvel occupant, socles des 8 emplacements disjoints.
 
+### Ce qui est couvert hors Studio pour les mutations (Phase 2, jalon A)
+- `Mutations.spec` (13 tests) : six mutations aux noms, multiplicateurs et probabilités exacts du cahier des charges ;
+  exclusivité (un seul résultat connu par tirage) ; **distribution statistique** : χ² à 6 ddl < 22,46 (α = 0,001) sur
+  3 × 400 000 tirages à graines fixes, chaque mutation observée (Divine comprise), test de sensibilité (Divine ×10
+  détectée) ; multiplicateurs appliqués à la vente (Carotte, Tomate, sac mixte = 2 020) ; bonus de précision sur la
+  valeur de base ; sauvegarde/restauration de chaque mutation (case + sac), mutation inconnue retirée.
+- `MutationRoll.spec` (10 tests) : bornes cumulées, balayage déterministe exact, E(1) = 1,5051, chance ×3.
+  Contrôle de mutation : inverser les poids Astrale/Divine fait échouer 3 tests.
+
 ### Ce qui n'est PAS couvert automatiquement
 Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
 → checklist ci-dessous, déroulée via Studio MCP (§3) ; ce qui exige un humain reste marqué comme tel.
@@ -101,6 +110,26 @@ Défauts trouvés puis corrigés (1ʳᵉ et 2ᵉ passes) :
   Roblox ; les jeux publiés utilisent `TextChatService`). `default.project.json` fixe désormais `TextChatService`.
 - **Chat sur le panneau Graines** : le chat (x 8→278, y 12→194) recouvrait le coin haut gauche du panneau
   (x 151→523, y 118→379). `HudController` masque le chat pendant que le panneau est ouvert et restaure l'état exact.
+
+### 2.2 Phase 2, jalon A (mutations) — validation Studio MCP du 2026-11-20 (Play solo, API désactivée)
+
+Deux sessions sur le build de la branche `phase-2/mutations-automation` (39 scripts identiques à `src/`).
+
+| Contrôle | Statut | Constat |
+|---|---|---|
+| Tirage serveur en jeu | ✅ | 9 tirages initiaux : 3 Brillantes ; puis Cristallisée et Radioactive obtenues naturellement |
+| Distribution du module réel (`Random` Roblox) | ✅ | `MutationService.Roll()` × 200 000 dans Studio : χ² = 3,33 (< 22,46) ; Brillante 12,07 %, Géante 4,96 %, Cristallisée 1,52 %, Radioactive 0,40 %, Astrale 0,087 %, Divine 0,009 %. (Un relevé de 41 replantations sans Brillante relevait du hasard) |
+| Sac et vente | ✅ | Composition du sac reçue du serveur (`StateSync`) = résultats de récolte ; ventes exactes : +690 (35 normales, 3 Brillantes, 1 Cristallisée, 1 Radioactive) et +230 (17 normales, 3 Brillantes) |
+| Invite et texte flottant | ✅ | « Carotte · Brillante ×2 » ; « Cristallisée ×8 / PARFAIT ! +5 » etc. dans la couleur de la mutation, accents corrects |
+| Notification ≥ ×8 | ✅ | « Mutation Radioactive ×20 récoltée : Carotte », « Mutation Cristallisée ×8 récoltée : Carotte » |
+| Anti-triche | ✅ | Attribut `Mutation` mis à « divine » **côté client** : invite locale « Divine ×150 », mais résultat serveur `carrot|normal` et sac normal |
+| Visuels des 6 mutations | ✅ | Aperçu forcé par attribut serveur (sans toucher aux données) : Brillante or mat + aura, Géante ×1,5, Cristallisée verre cyan, Radioactive vert néon + lumière, Astrale violet néon ×1,1 + lumière, Divine or néon ×1,2 + halo + lumière |
+| Console | ✅ | Aucune erreur serveur ni client |
+| Persistance réelle des mutations | ⛔ non vérifiable | Pas d'accès DataStore (place non publiée) ; couvert en Lune (`Mutations.spec`, `SessionLock.spec`) |
+
+Défauts trouvés puis corrigés pendant le jalon : Brillante blanc bleuté (reflets du ciel) → or mat `#FFD23F` ;
+Cristallisée et Astrale délavées par le néon → couleurs 3D saturées propres aux styles ; Divine trop proche de la
+Brillante → or néon + halo ; « CRISTALLISéE » (`string.upper` ne gère pas l'UTF-8) → nom affiché tel quel.
 
 ## 3. Studio MCP (opération manuelle, recommandée)
 

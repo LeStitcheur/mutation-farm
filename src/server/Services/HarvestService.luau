@@ -9,6 +9,7 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage.Shared
 local GameConfig = require(Shared.Config.GameConfig)
 local MutationConfig = require(Shared.Config.MutationConfig)
+local PlantConfig = require(Shared.Config.PlantConfig)
 local Types = require(Shared.Types)
 local BigNum = require(Shared.Util.BigNum)
 local Economy = require(Shared.Util.Economy)
@@ -97,6 +98,15 @@ function HarvestService.Harvest(player: Player, tileId: string): (boolean, Harve
 		bonus = bonus,
 	}
 	Net.event(Net.Events.HarvestResult):FireClient(player, result)
+	local mutationDef = MutationConfig.get(mutation)
+	local plant = PlantConfig.get(plantId)
+	if mutationDef and plant and mutationDef.multiplier >= GameConfig.Mutations.NotifyMinMultiplier then
+		Notifier.send(
+			player,
+			"success",
+			string.format("Mutation %s ×%d récoltée : %s", mutationDef.name, mutationDef.multiplier, plant.name)
+		)
+	end
 	return true, nil
 end
 

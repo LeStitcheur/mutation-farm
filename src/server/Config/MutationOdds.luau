@@ -7,14 +7,15 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Types = require(ReplicatedStorage.Shared.Types)
 local Deep = require(ReplicatedStorage.Shared.Util.Deep)
 
+-- Phase 2 (2026-11-20) : probabilités du cahier des charges Phase 2, espérance du multiplicateur E(1) = 1,5051.
 local weights: { Types.MutationWeight } = {
-	{ id = "normal", weight = 927093 },
-	{ id = "shiny", weight = 50000 }, -- Brillante ×2 : 5 %
-	{ id = "giant", weight = 16667 }, -- Géante ×4 : 1,667 %
-	{ id = "crystal", weight = 5000 }, -- Cristallisée ×8 : 0,5 %
-	{ id = "radioactive", weight = 1000 }, -- Radioactive ×20 : 0,1 %
-	{ id = "astral", weight = 200 }, -- Astrale ×50 : 0,02 %
-	{ id = "divine", weight = 40 }, -- Divine ×150 : 0,004 %
+	{ id = "normal", weight = 810100 }, -- 81,01 %
+	{ id = "shiny", weight = 120000 }, -- Brillante ×2 : 12 %
+	{ id = "giant", weight = 50000 }, -- Géante ×4 : 5 %
+	{ id = "crystal", weight = 15000 }, -- Cristallisée ×8 : 1,5 %
+	{ id = "radioactive", weight = 4000 }, -- Radioactive ×20 : 0,4 %
+	{ id = "astral", weight = 800 }, -- Astrale ×50 : 0,08 %
+	{ id = "divine", weight = 100 }, -- Divine ×150 : 0,01 %
 }
 
 local MutationOdds = {

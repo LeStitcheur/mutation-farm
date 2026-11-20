@@ -9,11 +9,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage.Shared
+local MutationConfig = require(Shared.Config.MutationConfig)
 local Types = require(Shared.Types)
 local FarmLayout = require(Shared.Util.FarmLayout)
 local SlotAllocator = require(Shared.Util.SlotAllocator)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
+local MutationService = require(script.Parent.MutationService)
 local PlantService = require(script.Parent.PlantService)
 
 type PlayerData = Types.PlayerData
@@ -287,6 +289,7 @@ local function releasePlot(player: Player)
 end
 
 -- Plante la graine sélectionnée sur une case débloquée (écrase la culture existante).
+-- La mutation du cycle est tirée ICI, côté serveur, puis sauvegardée avec la case (nil = normale).
 function FarmService.PlantTile(player: Player, tileId: string): boolean
 	local data = DataService.GetData(player)
 	local record = plots[player]
@@ -294,10 +297,12 @@ function FarmService.PlantTile(player: Player, tileId: string): boolean
 		return false
 	end
 	local plantId = PlantService.GetSelectedSeed(data)
+	local mutation = MutationService.Roll()
 	local tile: TileState = {
 		plantId = plantId,
 		plantedAt = Workspace:GetServerTimeNow(),
 		growTime = PlantService.ComputeGrowTime(data, plantId),
+		mutation = if mutation ~= MutationConfig.NORMAL then mutation else nil,
 	}
 	DataService.Update(player, function(d)
 		d.farm.tiles[tileId] = tile

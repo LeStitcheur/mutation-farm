@@ -11,6 +11,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage.Shared
 local GameConfig = require(Shared.Config.GameConfig)
+local MutationConfig = require(Shared.Config.MutationConfig)
 local PlantConfig = require(Shared.Config.PlantConfig)
 local Types = require(Shared.Types)
 local BigNum = require(Shared.Util.BigNum)
@@ -41,6 +42,14 @@ local entries: { [BasePart]: Entry } = {}
 local byTileId: { [string]: BasePart } = {}
 
 local HarvestController = {}
+
+-- Définition de mutation si `value` désigne une mutation réelle (nil pour "normal" ou une valeur inconnue).
+local function mutatedDef(value: unknown): Types.MutationDef?
+	if type(value) ~= "string" or value == MutationConfig.NORMAL then
+		return nil
+	end
+	return MutationConfig.get(value)
+end
 
 local function isOwnTile(tile: BasePart): boolean
 	return tile:GetAttribute("OwnerUserId") == localPlayer.UserId
@@ -122,6 +131,10 @@ local function update()
 		end
 		local plant = PlantConfig.get(plantId)
 		local objectText = if plant then plant.name else ""
+		local mutation = mutatedDef(tile:GetAttribute("Mutation"))
+		if mutation then
+			objectText = string.format("%s · %s ×%d", objectText, mutation.name, mutation.multiplier)
+		end
 		if prompt.ObjectText ~= objectText then
 			prompt.ObjectText = objectText
 		end
@@ -131,10 +144,10 @@ local function update()
 	end
 end
 
-local function showFloatingText(tile: BasePart, text: string, color: Color3)
+local function showFloatingText(tile: BasePart, text: string, color: Color3, lines: number)
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "HarvestFloat"
-	gui.Size = UDim2.fromOffset(260, 48)
+	gui.Size = UDim2.fromOffset(260, 48 * lines)
 	gui.StudsOffset = Vector3.new(0, 4, 0)
 	gui.AlwaysOnTop = true
 	gui.LightInfluence = 0
@@ -168,10 +181,17 @@ local function onHarvestResult(result: Types.HarvestResult)
 	local plant = PlantConfig.get(result.plantId)
 	local style = TIER_STYLE[result.tier] or TIER_STYLE.normal
 	local bonus = BigNum.sanitize(result.bonus)
-	if result.tier ~= "normal" and not BigNum.isZero(bonus) then
-		showFloatingText(tile, string.format("%s +%s", style.text, Format.bigNum(bonus)), style.color)
+	local text = if result.tier ~= "normal" and not BigNum.isZero(bonus)
+		then string.format("%s +%s", style.text, Format.bigNum(bonus))
+		else "+1 " .. (if plant then plant.name else "récolte")
+	-- Mutation (décidée par le serveur) : ligne dédiée, dans la couleur de la mutation.
+	local mutation = mutatedDef(result.mutation)
+	if mutation then
+		-- Pas de string.upper : il ne traite pas les lettres accentuées UTF-8 (« CRISTALLISéE »).
+		local heading = string.format("%s ×%d", mutation.name, mutation.multiplier)
+		showFloatingText(tile, heading .. "\n" .. text, Color3.fromHex(mutation.color), 2)
 	else
-		showFloatingText(tile, "+1 " .. (if plant then plant.name else "récolte"), style.color)
+		showFloatingText(tile, text, style.color, 1)
 	end
 end
 

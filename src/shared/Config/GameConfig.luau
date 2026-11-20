@@ -21,6 +21,10 @@ local GameConfig = {
 		BaseCapacity = 40,
 	},
 
+	Mutations = {
+		NotifyMinMultiplier = 8, -- notification à la récolte à partir de Cristallisée (×8)
+	},
+
 	Sell = {
 		Cooldown = 0.5,
 	},

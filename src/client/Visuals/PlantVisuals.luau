@@ -1,6 +1,9 @@
 --!strict
 -- Modèles de plantes procéduraux (primitives Roblox, aucun asset externe) et mise à l'échelle de croissance.
 -- Pour remplacer par un modèle d'art : prévoir ReplicatedStorage.Assets.Plants.<id> (Phase 7).
+-- Mutations : teinte, matériau, échelle, lumière et aura de particules LIMITÉES (une PointLight seulement à
+-- partir de Radioactive, ≤ 6 particules/s par plante). Couleurs 3D réglées en Studio (le néon et la lueur
+-- éclaircissent les teintes claires) : elles diffèrent volontairement des couleurs d'UI de MutationConfig.
 
 type Shape = "Block" | "Ball" | "Cylinder" | "Sphere"
 
@@ -23,6 +26,52 @@ export type PlantModel = {
 	model: Model,
 	parts: { ScaledPart },
 	sparkle: ParticleEmitter,
+	scale: number, -- facteur d'échelle de la mutation (Géante : 1,5), appliqué en plus de la croissance
+}
+
+type AuraSpec = { rate: number, speed: number, size: number }
+
+type MutationStyle = {
+	color: string, -- teinte 3D "#RRGGBB"
+	tint: number, -- part de cette teinte mélangée à la couleur d'origine (0..1)
+	material: Enum.Material?,
+	transparency: number?,
+	scale: number,
+	glow: number?, -- luminosité d'une PointLight (nil : aucune lumière)
+	aura: AuraSpec?,
+	halo: string?, -- disque néon au-dessus de la plante ("#RRGGBB")
+}
+
+-- Effets par mutation (docs/GAME_DESIGN.md §6).
+local MUTATION_STYLES: { [string]: MutationStyle } = {
+	shiny = { color = "#FFD23F", tint = 0.7, scale = 1, aura = { rate = 2, speed = 0.6, size = 0.25 } },
+	giant = { color = "#FFFFFF", tint = 0, scale = 1.5 },
+	crystal = { color = "#00BCD4", tint = 0.8, material = Enum.Material.Glass, transparency = 0.25, scale = 1 },
+	radioactive = {
+		color = "#64DD17",
+		tint = 0.85,
+		material = Enum.Material.Neon,
+		scale = 1,
+		glow = 1.2,
+		aura = { rate = 3, speed = 0.4, size = 0.35 },
+	},
+	astral = {
+		color = "#5B2EFF",
+		tint = 0.85,
+		material = Enum.Material.Neon,
+		scale = 1.1,
+		glow = 1.5,
+		aura = { rate = 4, speed = 0.8, size = 0.3 },
+	},
+	divine = {
+		color = "#FF8F00",
+		tint = 0.9,
+		material = Enum.Material.Neon,
+		scale = 1.2,
+		glow = 2.5,
+		aura = { rate = 6, speed = 1, size = 0.45 },
+		halo = "#FFD54F",
+	},
 }
 
 local LEAF = Color3.fromRGB(76, 168, 72)
@@ -258,22 +307,51 @@ local function newSparkle(): ParticleEmitter
 	return emitter
 end
 
+local function newAura(color: Color3, aura: AuraSpec): ParticleEmitter
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Name = "MutationAura"
+	emitter.Rate = aura.rate
+	emitter.Lifetime = NumberRange.new(1.2, 1.8)
+	emitter.Speed = NumberRange.new(aura.speed * 0.5, aura.speed)
+	emitter.SpreadAngle = Vector2.new(180, 180)
+	emitter.Size = NumberSequence.new(aura.size, 0)
+	emitter.LightEmission = 1
+	emitter.Color = ColorSequence.new(color)
+	return emitter
+end
+
+local function applyStyle(instance: BasePart, style: MutationStyle, color: Color3)
+	instance.Color = instance.Color:Lerp(color, style.tint)
+	if style.material then
+		instance.Material = style.material
+	end
+	if style.transparency then
+		instance.Transparency = style.transparency
+	end
+end
+
 local PlantVisuals = {}
 
 function PlantVisuals.has(plantId: string): boolean
 	return SPECS[plantId] ~= nil
 end
 
-function PlantVisuals.build(plantId: string): PlantModel?
+-- Construit la plante ; `mutationId` (nil ou "normal" : aucun effet) applique le style de mutation.
+function PlantVisuals.build(plantId: string, mutationId: string?): PlantModel?
 	local spec = SPECS[plantId]
 	if not spec then
 		return nil
 	end
+	local style = if mutationId then MUTATION_STYLES[mutationId] else nil
+	local mutationColor = if style then Color3.fromHex(style.color) else Color3.new(1, 1, 1)
 	local model = Instance.new("Model")
-	model.Name = "Plant_" .. plantId
+	model.Name = if style then string.format("Plant_%s_%s", plantId, mutationId :: string) else "Plant_" .. plantId
 	local scaled: { ScaledPart } = {}
 	for index, partSpec in spec.parts do
 		local instance = newPart("Part" .. index, partSpec)
+		if style then
+			applyStyle(instance, style, mutationColor)
+		end
 		instance.CFrame = partSpec.cframe
 		instance.Parent = model
 		table.insert(scaled, { part = instance, size = partSpec.size, offset = partSpec.cframe })
@@ -294,7 +372,32 @@ function PlantVisuals.build(plantId: string): PlantModel?
 	local sparkle = newSparkle()
 	sparkle.Parent = attachment
 
-	return { model = model, parts = scaled, sparkle = sparkle }
+	if style then
+		local glow = style.glow
+		if glow then
+			local light = Instance.new("PointLight")
+			light.Color = mutationColor
+			light.Brightness = glow
+			light.Range = 10
+			light.Shadows = false
+			light.Parent = anchor
+		end
+		local aura = style.aura
+		if aura then
+			newAura(mutationColor, aura).Parent = attachment
+		end
+		local halo = style.halo
+		if halo then
+			local haloSpec = column(0.15, 1.8, Vector3.new(0, spec.height + 0.8, 0), Color3.fromHex(halo))
+			haloSpec.material = Enum.Material.Neon
+			local haloPart = newPart("Halo", haloSpec)
+			haloPart.CFrame = haloSpec.cframe
+			haloPart.Parent = model
+			table.insert(scaled, { part = haloPart, size = haloSpec.size, offset = haloSpec.cframe })
+		end
+	end
+
+	return { model = model, parts = scaled, sparkle = sparkle, scale = if style then style.scale else 1 }
 end
 
 -- Place la plante au pied `base` avec l'échelle `scale` (taille et position des pièces).
