@@ -1,0 +1,19 @@
+# Outils téléchargés localement (voir scripts/setup-tools.ps1)
+/tools/bin/
+/tools/dl/
+/tools/defs/
+
+# Artefacts générés
+/build/
+sourcemap.json
+/Packages/
+/ServerPackages/
+/DevPackages/
+
+# Fichiers Studio locaux
+*.rbxl.lock
+*.rbxlx.lock
+
+# Divers
+.DS_Store
+Thumbs.db

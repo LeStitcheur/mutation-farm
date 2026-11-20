@@ -1,0 +1,7 @@
+# Std "luau" intégrée + globales Roblox/TestEZ déclarées localement (aucun téléchargement requis).
+# Le typage fin des API Roblox est assuré par luau-lsp (définitions officielles).
+std = "luau+roblox_lite"
+exclude = ["tools/*", "build/*", "Packages/*"]
+
+[lints]
+shadowing = "allow"

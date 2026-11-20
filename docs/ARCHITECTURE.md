@@ -1,0 +1,155 @@
+# MUTATION FARM — Architecture
+
+## 1. Principes
+
+1. **Serveur autoritaire** : monnaies, récoltes, mutations, achats, progression et sauvegarde sont décidés par le
+   serveur. Le client ne fait qu'**afficher** et **demander**.
+2. **Logique pure séparée** : toute règle de jeu calculable sans API Roblox vit dans `src/shared/Util/*`
+   (fonctions pures, `--!strict`) et est couverte par des tests exécutés hors Studio (Lune).
+3. **Configuration centralisée** : `src/shared/Config/*` (publique) et `src/server/Config/*` (secrète : probabilités).
+4. **Services modulaires** à dépendances acycliques, cycle de vie `Init()` puis `Start()`.
+5. **Timestamps plutôt que boucles** : la croissance est calculée à partir de `plantedAt + growTime`
+   (`workspace:GetServerTimeNow()`), aucune boucle serveur par plante.
+6. **Données d'abord** : `Types.luau` + `DataSchema` (version, migrations, réconciliation, validation JSON) sont le
+   contrat. Toute évolution du schéma = migration + test.
+
+## 2. Arborescence et mapping Rojo
+
+```
+default.project.json
+src/
+  shared/   -> ReplicatedStorage.Shared
+    Types.luau            Contrats de données (PlayerData, TileState, ClientState…)
+    Net.luau              Noms et accès aux RemoteEvents
+    Config/               GameConfig, PlantConfig, MutationConfig (gelées)
+    Util/                 Logique pure : BigNum, Format, Growth, Economy, Inventory, MutationRoll,
+                          DataSchema, Resets, FarmLayout, ClientView, Signal, Deep
+  server/   -> ServerScriptService.Server
+    init.server.luau      Bootstrap des services
+    Config/MutationOdds   Poids de mutation (jamais répliqués)
+    Infra/                DataStoreAdapter, RateLimiter, Notifier
+    Services/             DataService, EconomyService, PlantService, FarmService, HarvestService, SyncService
+  client/   -> StarterPlayer.StarterPlayerScripts.Client
+    init.client.luau      Bootstrap des contrôleurs
+    Controllers/          StateController, PlantRenderer, HarvestController, HudController
+    UI/                   Theme, Builder
+    Visuals/              PlantVisuals (modèles procéduraux)
+tests/
+  run.luau                Runner Lune (simule require(script…) et game:GetService)
+  TestEZLite.luau         describe/it/expect compatibles TestEZ
+  specs/*.spec.luau       Specs exécutables aussi par TestEZ en Studio
+```
+
+## 3. Services serveur
+
+Graphe de dépendances (acyclique, ordre de démarrage) :
+
+```
+DataService ─┬─> EconomyService ──> PlantService ──> FarmService ──> HarvestService
+             └─> SyncService
+```
+
+| Service | Responsabilité | API publique principale |
+|---|---|---|
+| **DataService** | Chargement/sauvegarde, verrou de session, autosave, migrations | `GetData`, `Update`, `IsLoaded`, `SaveNow`, signaux `ProfileLoaded`, `ProfileReleasing`, `Changed` |
+| **EconomyService** | Coins, vente du sac | `AddCoins`, `TrySpendCoins`, `SellAll` |
+| **PlantService** | Graines (déblocage, sélection), durée de pousse effective | `GetSelectedSeed`, `ComputeGrowTime`, `UnlockSeed`, `SelectSeed` |
+| **FarmService** | Parcelles (attribution, construction), état des cases, replantation | `PlantTile`, `GetTilePart`, `OwnsTile`, `GetPlot` |
+| **HarvestService** | Validation et exécution des récoltes, bonus de précision | `Harvest` |
+| **SyncService** | Réplication de l'état joueur (coalescée, ≤ 10 Hz) | — |
+| *MutationService* | Phase 2 | |
+| *AutomationService* | Phase 4 | |
+| *RebirthService, PrestigeService* | Phase 5 | |
+| *PurchaseService* | Phase 6 | |
+
+Convention : chaque module service expose `Init()` (connexions, création d'instances) et `Start()` (boucles,
+traitement des joueurs). `DataService.Start` est appelé en **dernier** pour que tous les abonnés soient prêts.
+
+## 4. Réseau (RemoteEvents, dossier `ReplicatedStorage.Remotes`)
+
+| Remote | Sens | Charge utile | Validation serveur |
+|---|---|---|---|
+| `HarvestRequest` | C→S | `tileId: string` | type, longueur ≤ 32, 8 req/s, propriété de la case, maturité (horloge serveur), distance ≤ 20 studs, capacité du sac |
+| `UnlockSeed` | C→S | `plantId: string` | type, 4 req/s, existence, ordre séquentiel, solde |
+| `SelectSeed` | C→S | `plantId: string` | type, 4 req/s, graine débloquée |
+| `ClientReady` | C→S | — | 1 req/s ; si profil chargé : renvoi de `LoadStatus` + `StateSync` (rattrape les événements émis avant la connexion des écouteurs) |
+| `StateSync` | S→C | `ClientState` | — |
+| `HarvestResult` | S→C | `{ tileId, plantId, tier, bonus }` | — |
+| `Notify` | S→C | `{ kind, text }` | — |
+| `LoadStatus` | S→C | `{ status, message }` | — |
+
+La vente passe par un `ProximityPrompt` serveur (le moteur valide la distance) avec un délai anti-spam.
+Aucune `RemoteFunction` serveur→client.
+
+## 5. État des cases et rendu
+
+- Données : `farm.tiles[tileId] = { plantId, plantedAt, growTime, mutation? }` (absent = case vide).
+- Le serveur construit la géométrie statique (socle, cases, marché, panneau) et écrit sur chaque case
+  (`CollectionService` tag `FarmTile`) les attributs `TileId`, `PlantId`, `PlantedAt`, `GrowTime`, `Mutation`.
+- Le client (`PlantRenderer`) construit **localement** les modèles de plantes de toutes les parcelles et anime la
+  croissance à 10 Hz via `Model:ScaleTo` à partir des attributs → zéro coût serveur par image.
+- Le client (`HarvestController`) crée des `ProximityPrompt` **locaux** sur ses propres cases mûres.
+
+## 6. Temps, croissance, hors ligne
+
+- Horloge unique : `workspace:GetServerTimeNow()` (secondes Unix, synchronisée client/serveur).
+- `growTime` est figé à la plantation (les bonus futurs ne modifient pas les cultures en cours).
+- La croissance continue hors ligne (timestamps). La production **automatisée** hors ligne (Phase 4) sera simulée de
+  façon agrégée sur `min(now − meta.lastSeen, 7200 s)`.
+
+## 7. Persistance (DataService)
+
+**Clé** : `player_<UserId>` dans le DataStore `MutationFarm_PlayerData_v1`.
+
+**Enregistrement** :
+```lua
+{ format = 1, data = PlayerData, session = { id = "<GUID serveur>", heartbeat = 1763625600 } | nil, savedAt = 1763625600 }
+```
+
+**Algorithme**
+1. **Chargement** : `UpdateAsync` ; si `session` appartient à un autre serveur et `heartbeat` < 120 s → verrou actif,
+   la transformation retourne `nil` (aucune écriture), nouvelle tentative toutes les 5 s jusqu'à 130 s puis kick.
+   Sinon on écrit notre `session` (vol du verrou périmé) et on lit `data`.
+2. **Migration** : `DataSchema.load` → migrations `version → VERSION`, réconciliation avec le gabarit, assainissement
+   (plantes inconnues retirées). Une version **future** (serveur obsolète) refuse le chargement **sans écrire**.
+3. **Autosave** toutes les 45 s (rafraîchit `heartbeat`). Avant chaque écriture : copie profonde + `DataSchema.validate`
+   (JSON-safe) ; donnée invalide = pas d'écriture.
+4. **Perte de verrou** : si un autre serveur détient la session lors d'une sauvegarde, la transformation annule,
+   le profil est marqué perdu (plus aucune écriture) et le joueur est expulsé.
+5. **Départ / BindToClose** : sauvegarde finale avec `session = nil` (3 tentatives avec backoff).
+   Un rejoin rapide sur le **même** serveur attend la fin de cette sauvegarde (`releasing[UserId]`) avant de recharger :
+   le verrou porte notre propre identifiant de session et serait sinon repris sur une donnée antérieure.
+6. **Jamais** de jeu sans données chargées : en cas d'échec, kick avec message (aucune sauvegarde d'un gabarit vide).
+7. **Studio** : si l'accès API est désactivé, repli automatique sur un store mémoire (avertissement en console).
+
+## 8. Achats (Phase 6 — conception figée)
+
+`ProcessReceipt` :
+1. Joueur absent ou profil non chargé → `NotProcessedYet`.
+2. `PurchaseId` déjà dans `data.receipts` → `PurchaseGranted` (idempotence).
+3. Appliquer l'effet dans `DataService.Update`, ajouter `PurchaseId` (FIFO borné à 200).
+4. `DataService.SaveNow(player)` ; succès → `PurchaseGranted`, échec → `NotProcessedYet` (Roblox réessaiera,
+   l'étape 2 empêche le double octroi).
+Game Passes : `UserOwnsGamePassAsync` au chargement + `PromptGamePassPurchaseFinished`, jamais stockés comme vérité.
+
+## 9. Grands nombres
+
+`BigNum` (voir `docs/ECONOMY.md` §6) : exact < 10¹⁵, 15 chiffres significatifs au-delà, opérations immuables,
+sérialisation directe. Monnaies et valeurs : `BigNum`. Compteurs (niveaux, rebirths) : `number` entiers.
+
+## 10. Sécurité
+
+- Toute entrée client est typée, bornée et limitée en débit (`RateLimiter`, seau à jetons par joueur).
+- Le client n'envoie jamais de montant, de prix, de timestamp ni de résultat aléatoire.
+- Les probabilités de mutation restent dans `ServerScriptService`.
+- Aucun `loadstring`, aucun `HttpService` sortant.
+- Limites acceptées (prototype) : un client automatisé peut viser le palier Parfait (les attributs `PlantedAt`/`GrowTime`
+  sont lisibles) — gain borné à +50 % et au débit limité ; l'autosave fait une seule tentative toutes les 45 s
+  (une panne DataStore > 120 s peut faire perdre le verrou et expulser le joueur, données intactes au dernier succès).
+
+## 11. Performance (budget)
+
+- Serveur : aucune boucle par plante ; autosave étalée ; réplication d'état coalescée (≤ 10 Hz, uniquement si modifié).
+- Client : rendu des plantes local, mise à l'échelle uniquement si variation > 1 %, `CastShadow = false`,
+  `CanCollide/CanQuery/CanTouch = false` sur les décors, particules à faible débit, uniquement sur les plantes mûres.
+- `StreamingEnabled = false` pour le prototype (petite carte) — à réévaluer en Phase 7.
