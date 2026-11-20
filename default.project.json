@@ -58,6 +58,11 @@
 				}
 			}
 		},
+		"TextChatService": {
+			"$properties": {
+				"ChatVersion": "TextChatService"
+			}
+		},
 		"Lighting": {
 			"$properties": {
 				"ClockTime": 14.5,

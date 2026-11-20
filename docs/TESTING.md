@@ -13,7 +13,7 @@ pwsh scripts/check.ps1 -Fix   # applique StyLua puis vérifie le reste
 | Formatage | StyLua 2.6 | style homogène (tabs, 120 colonnes) |
 | Lint | Selene 0.32 (std `luau` + `roblox_lite.yml`) | variables inconnues, ombres, tables mixtes… |
 | Typage | luau-lsp 1.70 `analyze`, mode `--!strict`, définitions Roblox officielles | erreurs de types, API Roblox mal utilisées |
-| Tests unitaires | Lune 0.11 + `tests/TestEZLite.luau` | logique pure : BigNum, économie, croissance, mutations, schéma de données, resets, géométrie |
+| Tests unitaires | Lune 0.11 + `tests/TestEZLite.luau` | logique pure : BigNum, économie, croissance, mutations, schéma de données, resets, géométrie, verrou de session (simulation multi-serveurs), attribution des parcelles (isolation) |
 | Build | `rojo build` → `build/MutationFarm.rbxlx` | le projet est constructible |
 
 ### Tests unitaires
@@ -23,9 +23,17 @@ pwsh scripts/check.ps1 -Fix   # applique StyLua puis vérifie le reste
 - Ajouter un test : créer `tests/specs/<Nom>.spec.luau` retournant `function() ... end`.
 - Les mêmes specs pourront tourner avec le vrai TestEZ en Studio (Phase 7, via Wally + `test.project.json`).
 
+### Ce qui est couvert hors Studio pour la sauvegarde et le multijoueur
+- `SessionLock.spec` (13 tests) : acquisition, attente, reprise d'un verrou périmé, refus d'écraser le verrou d'un
+  autre serveur, libération ; simulation multi-serveurs sur un store mémoire à sémantique `UpdateAsync` (progression
+  conservée d'un serveur à l'autre, second serveur bloqué, serveur « gelé » empêché d'écrire après reprise).
+  Contrôle de mutation : retirer la vérification de propriété dans `SessionLock.write` fait échouer 2 tests.
+- `SlotAllocator.spec` (7 tests) + `FarmLayout.spec` : un emplacement distinct par joueur, 9ᵉ joueur refusé, jamais deux
+  parcelles pour un joueur, libération tardive sans effet sur le nouvel occupant, socles des 8 emplacements disjoints.
+
 ### Ce qui n'est PAS couvert automatiquement
-Services serveur (DataStore, remotes, parcelles), contrôleurs client et rendu : ils nécessitent Roblox Studio.
-→ checklist manuelle ci-dessous, et Studio MCP (§3) pour l'automatiser.
+Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
+→ checklist ci-dessous, déroulée via Studio MCP (§3) ; ce qui exige un humain reste marqué comme tel.
 
 ## 2. Checklist manuelle Studio (Phase 1)
 
@@ -51,42 +59,48 @@ Sinon le serveur affiche `[DataStore] … Données en MÉMOIRE` et rien n'est sa
 | 14 | Émulateur mobile (téléphone) | HUD lisible, pas de chevauchement, invites utilisables au toucher |
 | 15 | Manette | Panneau navigable (sélection auto sur le 1er bouton), B ferme le panneau |
 | 16 | Exploit : exécuter `ReplicatedStorage.Remotes.HarvestRequest:FireServer("main:1")` en boucle depuis la console client | Aucun gain hors cases mûres, débit limité à 8/s, aucune erreur serveur |
+| 17 | Ouvrir le panneau Graines (G, Y, bouton) puis le fermer (G, B, X, bouton) | Chat Roblox masqué tant que le panneau est ouvert, puis restauré dans son état précédent |
 
-### 2.1 Dernière validation — 2026-11-20 (Studio MCP, Play solo, accès API désactivé)
+### 2.1 Dernière validation — 2026-11-20, 2ᵉ passe (Studio MCP, Play solo, accès API désactivé)
 
-Place `build/MutationFarm.rbxlx` (scripts identiques à `src/`), pilotée par Claude via les outils `roblox-studio`
-(`start_stop_play`, `character_navigation`, touches E / G / ButtonY / ButtonB, clics, `execute_luau` côté Client,
-`screen_capture`). Toute la boucle a été rejouée sur le build corrigé. Console : aucune erreur serveur ni client,
-seulement l'avertissement attendu `[DataStore] … Données en MÉMOIRE`.
+Place `build/MutationFarm.rbxlx` (38 scripts identiques à `src/`, `TextChatService`), pilotée par Claude via les
+outils `roblox-studio` (`start_stop_play`, `character_navigation`, touches E / G / ButtonY / ButtonB, clics,
+`execute_luau` Client et Server, `screen_capture`). Toute la boucle a été rejouée après les correctifs.
+Console : aucune erreur serveur ni client, seulement l'avertissement attendu `[DataStore] … Données en MÉMOIRE`.
+
+**Bilan : 13 vérifiées (1-11, 16, 17), 2 partielles (13 simulée, 15), 2 non vérifiables (12, 14) sur 17.**
+(La 1ʳᵉ passe annonçait « 11/16 » : erreur de décompte, c'était 12/16.)
 
 | # | Statut | Constat |
 |---|---|---|
 | 1 | ✅ | HUD « 0 » / « Sac 0/40 », téléportation devant la parcelle, panneau « Ferme de LeStitcheurFou ». Écran de chargement détruit (affichage trop bref pour être capturé) |
-| 2 | ✅ | 9 carottes ; carotte replantée mesurée à 0,9 → 1,8 → 2,5 → 3,0 → 3,2 studs (0,3 s → 6,2 s), étincelles à maturité |
+| 2 | ✅ | 9 carottes ; carotte replantée mesurée à 0,9 → 2,5 → 3,2 studs (0,3 s → 3 s → 6,2 s), étincelles à maturité |
 | 3 | ✅ | `PromptShown` « Récolter / Carotte » sur la case la plus proche (E) |
 | 4 | ✅ | « PARFAIT ! +5 », Coins +5, Sac +1, carotte replantée petite |
 | 5 | ✅ | Récolte tardive : « +1 Carotte », pas de bonus ; récolte à +3 s : « Bien ! +2 » |
 | 6 | ✅ | Invites « Sac plein ! » ×9, barre rouge, notification « Sac plein ! Va vendre au marché. » |
 | 7 | ✅ | « 40 récolte(s) vendue(s) : +400 Coins », Sac 0/40 |
 | 8 | ✅ | « Ton sac est vide : récolte des plantes mûres ! » (info) |
-| 9 | ✅ | Touche G : 7 plantes, Carotte « En culture », Tomate « Débloquer 750 » grise sous 750 (clic sans effet), autres « Verrouillée » |
-| 10 | ✅ | 750 Coins gagnés en jouant (aucun crédit de test) ; Coins −750, notification, Tomate « En culture », Maïs « Débloquer 6.00K » ; case récoltée → tomate (12 s) |
+| 9 | ✅ | G : 7 plantes, Carotte « En culture », Tomate « Débloquer 750 » grise sous 750 (clic sans effet), autres « Verrouillée » |
+| 10 | ✅ | 750 Coins gagnés en jouant (aucun crédit de test) ; Coins −750, notification complète sur 2 lignes, Tomate « En culture », Maïs « Débloquer 6.00K » ; case récoltée → tomate (12 s) |
 | 11 | ✅ | « Planter » Carotte → Carotte « En culture » |
-| 12 | ⛔ non vérifiable | Place non publiée (PlaceId 0) : pas d'accès DataStore. Repli mémoire confirmé (profil remis à zéro après Stop/Play, attendu) |
-| 13 | ⛔ non vérifiable | Le MCP ne lance qu'un Play solo (pas de « Clients and Servers ») |
-| 14 | ⛔ non vérifiable | Émulateur d'appareil non pilotable par le MCP ; HUD lisible dans un viewport 675×613 |
-| 15 | ◐ partiel | ButtonY ouvre / ButtonB ferme le panneau ; sélection auto du 1er bouton non testable (aucune manette, `LastInputType` = Keyboard) |
-| 16 | ✅ | 200 requêtes sur une case → 1 seule récolte ; `nil`, nombre, table, chaîne de 5000 car., `main:99` : ignorés sans erreur ; case à 22 studs refusée ; 8 jetons puis refus, recharge en 1 s |
+| 12 | ⛔ non vérifiable | Place non publiée (PlaceId 0) : pas d'accès DataStore. Repli mémoire confirmé (profil remis à zéro après Stop/Play, attendu). Règles du verrou couvertes en Lune (§1) |
+| 13 | ◐ simulé | Pas de 2ᵉ client possible (Play solo). Case factice mûre créée côté **serveur** avec un autre `OwnerUserId` : sa plante est rendue chez le joueur, aucune invite de récolte, E sans effet ; `HarvestRequest("main:1")` vise la case `main:1` **du demandeur** (refusée, hors portée) et la case factice reste intacte. Attribution des parcelles couverte en Lune (§1). **Test réel à 2 clients restant** |
+| 14 | ⛔ non vérifiable | Émulateur d'appareil non pilotable par le MCP. Mesure à 675×613 : bas du chat (barre de saisie) y≈194, haut du bouton Graines y≈208 (marge 14 px) — sur un écran plus bas, chat ouvert, ils peuvent se chevaucher : **à contrôler dans l'émulateur** |
+| 15 | ◐ partiel | ButtonY ouvre / ButtonB ferme le panneau (et restaurent le chat) ; sélection auto du 1er bouton non testable (aucune manette, `LastInputType` = Keyboard) |
+| 16 | ✅ | 200 requêtes sur une case mûre → 1 seule récolte ; `nil`, nombre, table, chaîne de 5000 car., `main:99` ignorés sans erreur ; case à 22 studs refusée ; seau de 8 jetons vidé → 6 cases mûres à portée refusées, puis récoltées après 1,2 s de recharge |
+| 17 | ✅ | Panneau ouvert (G, ButtonY, bouton Graines) : `CoreGuiType.Chat`, fenêtre et barre de saisie désactivées, **0** élément du chat affiché (26 panneau fermé). Fermé (G, ButtonB, bouton X, bouton Graines) : état restauré. Une fenêtre de chat désactivée avant l'ouverture le reste après la fermeture |
 
-Défauts trouvés puis corrigés :
+Défauts trouvés puis corrigés (1ʳᵉ et 2ᵉ passes) :
 - **Ferme enfouie sous la plaque de base** : Rojo sérialise `Position`, que Roblox ignore au chargement d'un `.rbxlx`
   → Baseplate (1024×4) restée centrée en y=0, recouvrant plateforme, cases et bordures. Corrigé dans
   `default.project.json` (propriété `CFrame` explicite pour Baseplate et SpawnLocation). Règle : toujours `CFrame`.
 - **Notifications tronquées** : le texte de déblocage tient sur 2 lignes (36 px) pour 30 px disponibles → « …tes
   cultures à ». Corrigé dans `HudController` (`AutomaticSize.Y` sur le toast et son libellé).
-
-Observation non corrigée : au survol de la souris, la fenêtre de chat Roblox (coin haut gauche) chevauche la moitié
-gauche du panneau Graines ouvert.
+- **Ancien chat** : sans `ChatVersion` dans le projet, la place tournait sous `LegacyChatService` (abandonné par
+  Roblox ; les jeux publiés utilisent `TextChatService`). `default.project.json` fixe désormais `TextChatService`.
+- **Chat sur le panneau Graines** : le chat (x 8→278, y 12→194) recouvrait le coin haut gauche du panneau
+  (x 151→523, y 118→379). `HudController` masque le chat pendant que le panneau est ouvert et restaure l'état exact.
 
 ## 3. Studio MCP (opération manuelle, recommandée)
 
@@ -102,6 +116,9 @@ Pour permettre à Claude d'inspecter et de tester le jeu dans Studio :
 Limites constatées des outils (2026-11-20) :
 - `screen_capture` ne rend pas les `BillboardGui` `AlwaysOnTop` (invites ProximityPrompt, textes « PARFAIT ! »,
   bulles de chat) : les vérifier par l'état des instances (`PromptShown`, `PlayerGui.ProximityPrompts`).
+- `screen_capture` ne rend pas non plus le chat `TextChatService` (`CoreGui.ExperienceChat`) : le vérifier par
+  `StarterGui:GetCoreGuiEnabled(Chat)`, `ChatWindowConfiguration.Enabled` et les éléments visibles de `appLayout`.
+- Pas de 2ᵉ client (Play solo seulement) ni de contrôle de l'émulateur d'appareil ou d'une vraie manette.
 - `execute_luau` tourne dans une VM séparée : `require` d'un service renvoie une **copie neuve** du module (état vide).
   Lire l'état joueur via le HUD (répliqué par `StateSync`) ou les attributs des cases `FarmTile`.
 - Sans plugin Rojo dans Studio, un correctif n'est visible qu'après `scripts/check.ps1` puis réouverture de

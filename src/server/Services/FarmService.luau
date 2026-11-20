@@ -11,6 +11,7 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage.Shared
 local Types = require(Shared.Types)
 local FarmLayout = require(Shared.Util.FarmLayout)
+local SlotAllocator = require(Shared.Util.SlotAllocator)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
 local PlantService = require(script.Parent.PlantService)
@@ -39,7 +40,7 @@ local COLORS = {
 }
 
 local plots: { [Player]: PlotRecord } = {}
-local slotOwners: { [number]: Player } = {}
+local slots: SlotAllocator.SlotAllocator<Player> = SlotAllocator.new(FarmLayout.MaxSlots)
 local farmsFolder: Folder? = nil
 
 local FarmService = {}
@@ -276,24 +277,12 @@ local function teleportToPlot(player: Player)
 	end
 end
 
-local function claimSlot(player: Player): number?
-	for slot = 1, FarmLayout.MaxSlots do
-		if not slotOwners[slot] then
-			slotOwners[slot] = player
-			return slot
-		end
-	end
-	return nil
-end
-
 local function releasePlot(player: Player)
 	local record = plots[player]
 	if record then
 		plots[player] = nil
 		record.model:Destroy()
-		if slotOwners[record.slot] == player then
-			slotOwners[record.slot] = nil
-		end
+		SlotAllocator.release(slots, record.slot, player)
 	end
 end
 
@@ -353,7 +342,7 @@ local function onProfileLoaded(player: Player, data: PlayerData)
 	if plots[player] or player.Parent ~= Players then
 		return
 	end
-	local slot = claimSlot(player)
+	local slot = SlotAllocator.claim(slots, player)
 	if not slot then
 		player:Kick("Serveur complet : aucune parcelle libre. Rejoins un autre serveur.")
 		return
@@ -362,7 +351,7 @@ local function onProfileLoaded(player: Player, data: PlayerData)
 		plots[player] = buildPlot(player, slot, data)
 	end)
 	if not ok then
-		slotOwners[slot] = nil
+		SlotAllocator.release(slots, slot, player)
 		warn(
 			string.format(
 				"[FarmService] Construction de la parcelle impossible pour %s : %s",

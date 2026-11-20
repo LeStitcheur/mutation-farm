@@ -17,6 +17,7 @@ local GameConfig = require(Shared.Config.GameConfig)
 local Types = require(Shared.Types)
 local DataSchema = require(Shared.Util.DataSchema)
 local Deep = require(Shared.Util.Deep)
+local SessionLock = require(Shared.Util.SessionLock)
 local Signal = require(Shared.Util.Signal)
 local Net = require(Shared.Net)
 local DataStoreAdapter = require(script.Parent.Parent.Infra.DataStoreAdapter)
@@ -72,22 +73,12 @@ local function tryAcquire(key: string): (AcquireOutcome, any)
 	local loaded: any = nil
 	local ok, err = pcall(function()
 		getStore().update(key, function(old: any): any
-			outcome = "error"
-			loaded = nil
-			local record: any = if type(old) == "table" then old else { format = Config.RecordFormat, savedAt = 0 }
-			local session = record.session
-			if
-				type(session) == "table"
-				and session.id ~= SESSION_ID
-				and type(session.heartbeat) == "number"
-				and now - session.heartbeat < Config.LockTimeout
-			then
-				outcome = "locked"
-				return nil -- verrou actif d'un autre serveur : aucune écriture
-			end
-			record.session = { id = SESSION_ID, heartbeat = now }
-			outcome = "ok"
-			loaded = record.data
+			-- Verrou actif d'un autre serveur : "locked" et aucune écriture (record = nil).
+			-- Annotation explicite : sans elle, l'inférence élargit l'union de littéraux en `string`.
+			local result: SessionLock.AcquireOutcome, record: any, data: any =
+				SessionLock.acquire(old, SESSION_ID, now, Config.LockTimeout, Config.RecordFormat)
+			outcome = result
+			loaded = data
 			return record
 		end)
 	end)
@@ -101,11 +92,7 @@ end
 local function releaseLockOnly(key: string)
 	local ok, err = pcall(function()
 		getStore().update(key, function(old: any): any
-			if type(old) == "table" and type(old.session) == "table" and old.session.id == SESSION_ID then
-				old.session = nil
-				return old
-			end
-			return nil
+			return SessionLock.release(old, SESSION_ID)
 		end)
 	end)
 	if not ok then
@@ -148,18 +135,10 @@ local function writeProfile(profile: Profile, release: boolean): boolean
 		local lost = false
 		local ok, err = pcall(function()
 			getStore().update(profile.key, function(old: any): any
-				lost = false
-				local session = if type(old) == "table" then old.session else nil
-				if type(session) ~= "table" or session.id ~= SESSION_ID then
-					lost = true
-					return nil -- le verrou appartient à quelqu'un d'autre : ne jamais écraser
-				end
-				return {
-					format = Config.RecordFormat,
-					data = snapshot,
-					session = if release then nil else { id = SESSION_ID, heartbeat = now },
-					savedAt = now,
-				}
+				-- nil : le verrou appartient à quelqu'un d'autre, on n'écrase jamais.
+				local record = SessionLock.write(old, SESSION_ID, snapshot, release, now, Config.RecordFormat)
+				lost = record == nil
+				return record
 			end)
 		end)
 		if ok then

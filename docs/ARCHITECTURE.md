@@ -106,7 +106,8 @@ Aucune `RemoteFunction` serveur→client.
 { format = 1, data = PlayerData, session = { id = "<GUID serveur>", heartbeat = 1763625600 } | nil, savedAt = 1763625600 }
 ```
 
-**Algorithme**
+**Algorithme** (règles du verrou : module pur `Shared.Util.SessionLock`, testé en Lune avec une simulation
+multi-serveurs ; `DataService` ne fait que les appliquer dans `UpdateAsync`)
 1. **Chargement** : `UpdateAsync` ; si `session` appartient à un autre serveur et `heartbeat` < 120 s → verrou actif,
    la transformation retourne `nil` (aucune écriture), nouvelle tentative toutes les 5 s jusqu'à 130 s puis kick.
    Sinon on écrit notre `session` (vol du verrou périmé) et on lit `data`.
