@@ -45,12 +45,14 @@ pwsh scripts/check.ps1 -Fix   # applique StyLua puis vérifie le reste
   sac plein sans perte) ; bonus de précision pour le joueur seulement ; **concurrence** joueur + drone au même instant
   = une récolte ; **duplication** : 100 tentatives alternées sur un cycle = un seul objet vendu ; reprise après vente
   avec la mutation conservée. Contrôle de mutation : ne plus vider la case dans `apply` fait échouer 3 tests.
-- `Drones.spec` (12 tests) : configuration valide et gelée ; prix 1 500 / 3 750 / 9 375 ; achat refusé (type inconnu,
+- `Drones.spec` (13 tests) : configuration valide et gelée (dont `graceDelay ≥ GoodWindow`) ; **délai de grâce**
+  (plante ignorée à 4,99 s de maturité, visée à 5 s) ; prix 1 500 / 3 750 / 9 375 ; achat refusé (type inconnu,
   fonds, maximum) ; flotte plafonnée ; points d'attente centrés et espacés ; portée (parcelle principale couverte,
   extensions non) ; station sur le socle et à l'écart ; cibles (mûres, plus ancienne d'abord, capacité, réservées,
   hors portée, parcelle verrouillée) ; sauvegarde/restauration et assainissement de `machines.drones`.
 - `DroneEconomy.spec` (7 tests) : simulation 10 min Carotte/Tomate (§ ECONOMY 7) — sac ≤ 40, aucun bonus drone,
-  récoltes ≤ production, ventes jamais réduites, drones seuls croissants, rentabilité du premier drone, constat Tomate.
+  récoltes ≤ production, ventes jamais réduites, drones seuls croissants, rentabilité du premier drone, perte ≤ 1 %
+  pour un joueur attentif (délai de grâce). Contrôle de mutation : `graceDelay = 0` fait échouer 3 tests.
 
 ### Ce qui n'est PAS couvert automatiquement
 Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
@@ -154,6 +156,7 @@ Coins gagnés en jouant (aucun crédit de test).
 | Achat sans fonds | ✅ | « Pas assez de Coins pour ce drone. », aucun drone créé |
 | Achat n°1 puis n°2 | ✅ | 1 660 → 160 puis 4 670 → 928 (−1 500, −3 750) ; « Drone récolteur acheté ! (1/3) » / « (2/3) » ; invite « 3.75K · 1/3 » puis « 9.37K · 2/3 » ; flotte réorganisée (x = −198 et −192, centrée), 2 modèles client exactement |
 | Récolte automatique | ✅ | Joueur à 40 studs : 1 drone = 4 récoltes en 17 s (≈ 4,1 s), 2 drones = 10 récoltes en 20 s sur des cases distinctes ; palier normal, **bonus 0** ; mutations conservées dans le sac |
+| Délai de grâce (5 s) | ✅ | Ferme vidée à la main puis laissée au drone : 1ʳᵉ récolte drone à 6,55 s de maturité (attendu ≥ 5 s et < 9,25 s), suivante à 10,6 s ; avec arriéré, âges ≥ 19,7 s ; joueur à côté d'une plante mûre, drone actif : « Parfait » (+5) à 0,42 s |
 | Concurrence joueur/drone | ✅ | Rafale de requêtes manuelles sur les cases mûres pendant que le drone travaille : 26 résultats (25 joueur, 1 drone) = +26 au sac ; récoltes = replantations sur chacune des 9 cases (0 écart) |
 | Sac plein | ✅ | Statut `bag_full`, bulle « Sac plein ! » au-dessus du drone, aucune récolte, notification « Tes drones attendent : sac plein ! Va vendre au marché. » ; reprise dès la vente (statut `working`) |
 | Vente avec récoltes de drone | ✅ | Sac serveur 33 normales + 6 Brillantes + 1 Géante → « +490 Coins » (attendu 490) |

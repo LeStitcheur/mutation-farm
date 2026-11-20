@@ -70,7 +70,8 @@ function DroneLogic.inRange(home: Vec3, tileId: string, range: number): boolean
 	return dx * dx + dz * dz <= range * range
 end
 
--- Cases débloquées, mûres et à portée, de la plus anciennement mûre à la plus récente (au plus `def.capacity`),
+-- Cases débloquées, mûres depuis au moins `def.graceDelay` secondes (délai de grâce : les fenêtres de bonus du
+-- joueur sont passées) et à portée, de la plus anciennement mûre à la plus récente (au plus `def.capacity`),
 -- en ignorant celles déjà réservées par un autre drone pendant le même tick.
 function DroneLogic.selectTargets(
 	data: PlayerData,
@@ -84,7 +85,7 @@ function DroneLogic.selectTargets(
 		if
 			not reserved[tileId]
 			and FarmLayout.isTileUnlocked(data.farm.plots, tileId)
-			and Growth.isRipe(tile, now)
+			and now - Growth.ripeAt(tile) >= def.graceDelay
 			and DroneLogic.inRange(home, tileId, def.range)
 		then
 			table.insert(candidates, { id = tileId, ripeAt = Growth.ripeAt(tile) })

@@ -45,8 +45,8 @@ et versionné (commit/tag Git). Pas de développement simultané de plusieurs sy
 - [x] Sac plein (attente sans perte, bulle, notification), aucun double gain joueur/drone (validation atomique)
 - [x] Animation client (vol, pales, aller-retour), architecture multi-types pilotée par `DroneConfig`
 - [x] Simulation manuel vs drones (`docs/ECONOMY.md` §7), tests Lune + validation Studio MCP (`docs/TESTING.md` §2.3)
-- [ ] Décision d'équilibrage : avec la Tomate, un drone remplace des récoltes « Parfait » d'un joueur attentif
-      (−3 %) — option délai de grâce à trancher (Phase 3)
+- [x] Délai de grâce de 5 s (`graceDelay`) : les drones ne visent que les plantes mûres depuis 5 s, les bonus restent
+      au joueur (Tomate + 1 drone : −3 % → +1 % ; contrepartie chiffrée dans `docs/ECONOMY.md` §7)
 - [ ] Manuel : station à 2 joueurs, 3ᵉ drone, persistance réelle de la flotte, station au toucher et à la manette
 
 ## Phase 3 — Croissance de la ferme

@@ -81,6 +81,7 @@ Règles :
 9. Les drones ne touchent jamais de bonus de précision, ne dépassent jamais la production de la ferme ni la capacité
    du sac, et ne réduisent jamais les **ventes** du joueur (simulation, §7).
 10. Le premier drone se rembourse en ≤ 30 min là où il rapporte (Carotte en jeu actif, joueur absent qui vend).
+11. Délai de grâce ≥ fenêtre « Bien » ; des drones ne font jamais perdre plus de 1 % à un joueur attentif.
 
 ## 6. Grands nombres
 
@@ -101,6 +102,7 @@ Paramètres par type (`src/shared/Config/DroneConfig.luau`) et globaux (`GameCon
 | `interval` | 4 s | délai entre deux actions d'un drone |
 | `capacity` | 1 | plantes récoltées par action |
 | `range` | 25 studs | portée horizontale autour de son point d'attente (couvre la parcelle principale, pas les extensions) |
+| `graceDelay` | 5 s | délai de grâce : un drone ne vise une plante que 5 s après sa maturité (fenêtres Parfait/Bien laissées au joueur ; invariant `graceDelay ≥ GoodWindow`) |
 | `TickInterval` | 0,25 s | cadence de l'unique boucle serveur des drones |
 | `BagFullNoticeInterval` | 30 s | « Tes drones attendent : sac plein » au plus une fois par 30 s |
 
@@ -113,24 +115,32 @@ gain joueur/drone) ; drones actifs uniquement quand le joueur est en ligne (hors
 Joueur « attentif » : récolte la case mûre la plus ancienne avec 1,2 s de déplacement, vend sac plein (aller-retour
 8 s) ; valeur de vente = espérance des mutations (×1,5051) ; mêmes modules que le serveur (`HarvestRules`, `DroneLogic`).
 
+Avec le délai de grâce retenu (5 s) :
+
 | Scénario | Carotte | Tomate |
 |---|---|---|
 | Joueur attentif seul | 650 | 3 123 |
-| + 1 drone | 847 (+30 %) | 3 029 (−3 %) |
-| + 3 drones | 1 117 (+72 %) | 3 171 (+2 %) |
+| + 1 drone | 725 (+11,5 %) | 3 155 (+1,0 %) |
+| + 3 drones | 738 (+13,6 %) | 3 113 (−0,3 %, décalage de calendrier, ventes identiques) |
 | 1 drone seul (joueur absent qui vient vendre) | 181 | 813 |
-| 3 drones seuls | 542 | 2 438 |
+| 3 drones seuls | 542 | 1 896 |
+
+Choix du délai (même simulation, Coins/min) :
+
+| `graceDelay` | Carotte actif + 1 | Tomate actif + 1 | Tomate actif + 3 | Tomate 3 drones seuls |
+|---|---|---|---|---|
+| 0 s (sans délai) | 847 (+30 %) | 3 029 (−3,0 %) | 3 171 (+1,5 %) | 2 438 |
+| 1,5 s | 847 (+30 %) | 3 109 (−0,4 %) | 3 048 (−2,4 %) | 2 167 |
+| 3 s | 790 (+21 %) | 3 111 (−0,4 %) | 3 085 (−1,2 %) | 1 896 |
+| **5 s (retenu)** | 725 (+11,5 %) | **3 155 (+1,0 %)** | 3 113 (−0,3 %) | 1 896 |
 
 Lecture :
-- Le drone rapporte quand la ferme produit plus vite que le joueur ne récolte (Carotte : 1,5 récolte/s contre 0,83/s
-  pour le joueur) : premier drone remboursé en ≈ 7,6 min de jeu actif.
-- Avec la Tomate (0,75 récolte/s, déjà absorbée par un joueur attentif), le drone **prend des récoltes que le joueur
-  aurait faites avec un bonus Parfait** : les ventes restent identiques (24 381), seuls les bonus baissent
-  (6 847 → 5 911). Effet direct de « aucun bonus pour les drones ».
+- **Sans délai**, avec la Tomate (0,75 récolte/s, déjà absorbée par un joueur attentif), le drone prenait des récoltes
+  que le joueur aurait faites avec un bonus Parfait (bonus 6 847 → 5 911, −3 %). Avec 5 s, seul délai testé où un
+  drone ajouté à un joueur actif reste positif sur la Tomate, le drone ne récolte que les plantes « oubliées ».
+- Contrepartie : le drone apporte moins au jeu actif sur Carotte (+11,5 % au lieu de +30 %, premier drone remboursé en
+  ≈ 20 min au lieu de ≈ 7,6 min) et 3 drones seuls produisent 22 % de moins sur Tomate (chaque plante attend 5 s).
 - Pour un joueur absent qui vient vendre, le premier drone se rembourse en ≈ 8 min (Carotte) / ≈ 2 min (Tomate).
-- Sans personne pour vendre, les drones s'arrêtent dès que le sac est plein (40 objets ≈ 53 s à 3 drones sur Tomate) :
-  la vente automatique relève de la Phase 4.
-
-Pistes d'équilibrage (non implémentées, décision de design) : délai de grâce (le drone n'attaque une plante qu'après
-la fenêtre « Bien » de 5 s, pour laisser les bonus au joueur), drones ciblant en priorité les cases éloignées du
-joueur, prix ou intervalle ajustés au rééquilibrage Phase 3.
+- Sans personne pour vendre, les drones s'arrêtent dès que le sac est plein : la vente automatique relève de la Phase 4.
+- Réglage : `graceDelay` est un paramètre par type de drone ; un futur drone « rapide » pourra avoir un délai plus
+  court (l'invariant `graceDelay ≥ GoodWindow` serait alors à revoir explicitement).

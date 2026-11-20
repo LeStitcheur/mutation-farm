@@ -20,6 +20,7 @@ local list: { DroneDef } = {
 		interval = 4,
 		capacity = 1,
 		range = 25, -- couvre la parcelle principale depuis n'importe quel point d'attente
+		graceDelay = 5, -- = fenêtre « Bien » : le joueur garde ses chances de Parfait/Bien (docs/ECONOMY.md §7)
 		color = "#4FC3F7",
 	},
 }

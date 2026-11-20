@@ -9,6 +9,8 @@ return function()
 	local BigNum = require(Shared.Util.BigNum)
 	local Deep = require(Shared.Util.Deep)
 
+	local GameConfig = require(Shared.Config.GameConfig)
+
 	local harvester = DroneConfig.get("harvester")
 
 	local function richData(coins: number, owned: number?)
@@ -33,6 +35,8 @@ return function()
 				expect(def.interval > 0).to.equal(true)
 				expect(def.capacity >= 1 and def.capacity % 1 == 0).to.equal(true)
 				expect(def.range > 0).to.equal(true)
+				-- délai de grâce ≥ fenêtre « Bien » : un drone ne prive jamais le joueur d'un bonus de précision
+				expect(def.graceDelay >= GameConfig.Harvest.GoodWindow).to.equal(true)
 				expect(string.match(def.color, "^#%x%x%x%x%x%x$")).to.be.ok()
 			end
 			expect(function()
@@ -116,31 +120,43 @@ return function()
 
 		it("cases mûres seulement, la plus anciennement mûre d'abord, dans la limite de la capacité", function()
 			local data = farmWith({ ["main:1"] = 3, ["main:2"] = 1, ["main:3"] = 50 })
-			local targets = DroneLogic.selectTargets(data, 10, home, harvester, {})
+			local targets = DroneLogic.selectTargets(data, 20, home, harvester, {})
 			expect(#targets).to.equal(harvester.capacity)
 			expect(targets[1]).to.equal("main:2")
 			local wide = table.clone(harvester) :: any
 			wide.capacity = 5
-			local all = DroneLogic.selectTargets(data, 10, home, wide, {})
+			local all = DroneLogic.selectTargets(data, 20, home, wide, {})
 			expect(#all).to.equal(2) -- main:3 n'est pas mûre
 			expect(all[2]).to.equal("main:1")
 		end)
 
 		it("ignore les cases réservées par un autre drone et celles hors de portée", function()
 			local data = farmWith({ ["main:1"] = 0, ["main:2"] = 0 })
-			local targets = DroneLogic.selectTargets(data, 10, home, harvester, { ["main:1"] = true })
+			local targets = DroneLogic.selectTargets(data, 20, home, harvester, { ["main:1"] = true })
 			expect(targets[1]).to.equal("main:2")
 			local short = table.clone(harvester) :: any
 			short.range = 1
-			expect(#DroneLogic.selectTargets(data, 10, home, short, {})).to.equal(0)
+			expect(#DroneLogic.selectTargets(data, 20, home, short, {})).to.equal(0)
+		end)
+
+		it("délai de grâce : une plante n'est visée qu'après graceDelay secondes de maturité", function()
+			local data = farmWith({ ["main:1"] = 0 }) -- mûre à t = 6
+			local ripeAt = 6
+			expect(#DroneLogic.selectTargets(data, ripeAt, home, harvester, {})).to.equal(0)
+			expect(#DroneLogic.selectTargets(data, ripeAt + harvester.graceDelay - 0.01, home, harvester, {})).to.equal(
+				0
+			)
+			expect(DroneLogic.selectTargets(data, ripeAt + harvester.graceDelay, home, harvester, {})[1]).to.equal(
+				"main:1"
+			)
 		end)
 
 		it("ignore les cases d'une parcelle verrouillée, même à portée", function()
 			local data = farmWith({ ["west:5"] = 0 })
 			local westHome = { x = -34, y = 9, z = 0 }
-			expect(#DroneLogic.selectTargets(data, 10, westHome, harvester, {})).to.equal(0)
+			expect(#DroneLogic.selectTargets(data, 20, westHome, harvester, {})).to.equal(0)
 			data.farm.plots.west = true
-			expect(DroneLogic.selectTargets(data, 10, westHome, harvester, {})[1]).to.equal("west:5")
+			expect(DroneLogic.selectTargets(data, 20, westHome, harvester, {})[1]).to.equal("west:5")
 		end)
 	end)
 

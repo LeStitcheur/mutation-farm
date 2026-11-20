@@ -103,8 +103,8 @@ Aucune `RemoteFunction` serveur→client.
   Modifier l'attribut côté client ne change que l'affichage local (vérifié en Studio).
 - **Drones (Phase 2)** : `DroneService` lit `machines.drones`, place un point d'attente local par drone
   (`DroneLogic.homePosition`) et, toutes les 0,25 s, fait agir chaque drone dont l'`interval` est écoulé :
-  `DroneLogic.selectTargets` (cases mûres, débloquées, à portée, la plus ancienne d'abord, non réservées pendant le
-  tick) → `HarvestService.HarvestForDrone`. `HarvestRules.check` puis `apply` s'exécutent dans le même mutateur
+  `DroneLogic.selectTargets` (cases mûres depuis au moins `graceDelay` = 5 s, débloquées, à portée, la plus ancienne
+  d'abord, non réservées pendant le tick) → `HarvestService.HarvestForDrone`. `HarvestRules.check` puis `apply` s'exécutent dans le même mutateur
   synchrone de `DataService.Update` : un joueur et un drone ne peuvent jamais récolter deux fois la même culture.
   Le serveur n'écrit que des attributs sur des ancres invisibles (`Status`, `TargetTile`, `ActionAt`) ; `DroneRenderer`
   anime localement vol, pales, aller-retour et bulle « Sac plein ! ». Ajouter un type = une entrée de `DroneConfig`.

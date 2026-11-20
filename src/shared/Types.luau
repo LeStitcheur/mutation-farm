@@ -140,6 +140,7 @@ export type DroneDef = {
 	interval: number, -- secondes entre deux actions
 	capacity: number, -- plantes récoltées par action
 	range: number, -- portée horizontale (studs) autour du point d'attente
+	graceDelay: number, -- secondes après maturité avant qu'un drone vise une plante (bonus laissés au joueur)
 	color: string, -- "#RRGGBB" (corps du drone)
 }
 

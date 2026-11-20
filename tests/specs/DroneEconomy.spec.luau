@@ -182,10 +182,14 @@ return function()
 			end
 		end)
 
-		it("constat Tomate : un joueur attentif récolte déjà toute la production (drones ≈ neutres)", function()
-			local tomato = scenarios.tomato
-			local relative = math.abs(tomato.manual3.perMinute - tomato.manual.perMinute) / tomato.manual.perMinute
-			expect(relative < 0.05).to.equal(true)
+		it("délai de grâce : des drones ne font jamais perdre plus de 1 % à un joueur attentif", function()
+			-- Tolérance : les replantations décalées par un drone déplacent le calendrier de maturité (≈ 2 bonus / 10 min).
+			for _, set in scenarios do
+				for _, withDrones in { set.manual1, set.manual3 } do
+					expect(withDrones.perMinute >= set.manual.perMinute * 0.99).to.equal(true)
+				end
+			end
+			expect(scenarios.tomato.manual1.perMinute > scenarios.tomato.manual.perMinute).to.equal(true)
 		end)
 	end)
 end
