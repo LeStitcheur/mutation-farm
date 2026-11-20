@@ -9,7 +9,7 @@ et versionné (commit/tag Git). Pas de développement simultané de plusieurs sy
 - [x] Docs : GAME_DESIGN, ARCHITECTURE, ECONOMY, ROADMAP, TESTING, CLAUDE.md
 - [x] Contrats de données (`Types`, `DataSchema` v1), invariants économiques testés
 
-## Phase 1 — Prototype jouable ✅ (à valider en Studio)
+## Phase 1 — Prototype jouable ✅ (validé en Studio, sauf multijoueur / mobile / persistance réelle)
 - [x] Parcelle personnelle 3×3, attribution/libération, téléportation
 - [x] Sauvegarde : verrou de session, UpdateAsync, autosave, BindToClose, migrations, repli mémoire en Studio
 - [x] Croissance par timestamps, replantation automatique
@@ -17,7 +17,10 @@ et versionné (commit/tag Git). Pas de développement simultané de plusieurs sy
 - [x] Marché : vente → Coins
 - [x] Boutique de graines (7 plantes, déblocage séquentiel, sélection)
 - [x] HUD responsive (Coins, sac, graines, notifications, chargement)
-- [ ] **Validation manuelle en Studio** (checklist `docs/TESTING.md`) — nécessite Studio
+- [x] **Validation en Studio** via Studio MCP (2026-11-20) : 11/16 lignes de la checklist vérifiées,
+      2 défauts corrigés (plaque de base qui recouvrait la ferme, notifications tronquées) — voir `docs/TESTING.md` §2.1
+- [ ] Validation manuelle restante : persistance DataStore réelle (place publiée), 2 joueurs, émulateur mobile,
+      vraie manette (lignes 12 à 15)
 
 ## Phase 2 — Mutations
 - [ ] MutationService : tirage pondéré à la plantation (`MutationRoll`, `MutationOdds` serveur)

@@ -376,16 +376,20 @@ local function toast(kind: Types.NotifyKind, text: string)
 		elseif kind == "error" then Theme.Colors.Red
 		else Theme.Colors.Blue
 	toastCounter += 1
+	-- Hauteur automatique : un message long passe sur deux lignes au lieu d'être tronqué
+	-- (46 px = hauteur minimale d'une ligne, marges comprises).
 	local item = Builder.new("Frame", {
 		Name = "Toast",
 		LayoutOrder = toastCounter,
 		Size = UDim2.fromOffset(440, 46),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = Theme.Colors.PanelDark,
 		BackgroundTransparency = 0.08,
 		Parent = current.toastList,
 	}, { Builder.corner(12), Builder.stroke(color, 3), Builder.padding(8) }) :: Frame
 	local label = Builder.label({
-		Size = UDim2.fromScale(1, 1),
+		Size = UDim2.new(1, 0, 0, 30),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		Text = text,
 		TextSize = 18,
 		TextWrapped = true,
