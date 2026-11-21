@@ -20,7 +20,7 @@ Fantasy colorée et stylisée, sessions courtes, progression lisible, aucun acha
 | 5–60 min | Débloquer une graine plus rentable → la sélectionner | **Phase 1 ✅** |
 | 10–60 min | Améliorations, extensions de ferme, mutations, Mutadex | Phase 2–3 |
 | 1–3 h | Drones : récolte, collecte, vente auto, production hors ligne (≤ 2 h) | Phase 4 |
-| Plusieurs h | Rebirth (reset partiel), Prestige (reset profond) | Phase 5 |
+| 15 min – plusieurs h | Rebirth (reset partiel, implémenté), Prestige (reset profond) | Phase 3 |
 
 ## 3. Ferme
 
@@ -82,13 +82,13 @@ Récolter une mutation rapporte de la **Mutation Essence** et l'inscrit au **Mut
 | Monnaie | Source | Usage | Reset |
 |---|---|---|---|
 | **Coins** | Vente, bonus de précision | Graines, améliorations normales, machines | Rebirth + Prestige |
-| **Mutation Essence** | Récoltes mutées | Laboratoire de mutation (chance, vitesse) | Prestige |
-| **Rebirth Tokens** | Rebirth | Améliorations de rebirth | Prestige |
+| **Mutation Essence** | Rebirth (Phase 3) ; récoltes mutées (prévu) | Améliorations de rebirth, laboratoire de mutation (jalon C) | Prestige |
+| ~~Rebirth Tokens~~ | — | Remplacés par la Mutation Essence (cahier des charges Phase 3) ; champ conservé, inutilisé | — |
 | **Primal Cores** | Prestige | Améliorations permanentes | Jamais |
 
 Aucune monnaie de prestige n'est vendue contre des Robux.
 
-## 8. Resets [Phase 5] — règles contractuelles (testées dans `tests/specs/Resets.spec.luau`)
+## 8. Resets [Phase 3] — règles testées (`tests/specs/Resets.spec.luau`) ; détail exact : `docs/PROGRESSION.md`
 
 | Élément | Rebirth | Prestige |
 |---|---|---|

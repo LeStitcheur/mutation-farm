@@ -15,6 +15,11 @@ local MutationService = require(Services.MutationService)
 local FarmService = require(Services.FarmService)
 local HarvestService = require(Services.HarvestService)
 local DroneService = require(Services.DroneService)
+local ProgressionService = require(Services.ProgressionService)
+local RebirthService = require(Services.RebirthService)
+local PrestigeService = require(Services.PrestigeService)
+local UpgradeService = require(Services.UpgradeService)
+local DevService = require(Services.DevService)
 local SyncService = require(Services.SyncService)
 
 type Service = {
@@ -32,6 +37,11 @@ local ordered: { { name: string, service: Service } } = {
 	{ name = "FarmService", service = FarmService },
 	{ name = "HarvestService", service = HarvestService },
 	{ name = "DroneService", service = DroneService },
+	{ name = "ProgressionService", service = ProgressionService }, -- verrou commun des transitions
+	{ name = "RebirthService", service = RebirthService },
+	{ name = "PrestigeService", service = PrestigeService },
+	{ name = "UpgradeService", service = UpgradeService },
+	{ name = "DevService", service = DevService }, -- Studio uniquement (outils de test MCP)
 	{ name = "SyncService", service = SyncService },
 	{ name = "DataService", service = DataService },
 }

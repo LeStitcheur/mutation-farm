@@ -109,10 +109,13 @@ end
 local services = {
 	ReplicatedStorage = newNode("ReplicatedStorage", "ReplicatedStorage", nil, nil),
 	ServerScriptService = newNode("ServerScriptService", "ServerScriptService", nil, nil),
+	-- Outils de test hors jeu (jamais synchronisés par Rojo) : tests/sim -> TestService.Sim.
+	TestService = newNode("TestService", "TestService", nil, nil),
 }
 rawget(services.ReplicatedStorage, "__children").Shared = buildDir("src/shared", "Shared", services.ReplicatedStorage)
 rawget(services.ServerScriptService, "__children").Server =
 	buildDir("src/server", "Server", services.ServerScriptService)
+rawget(services.TestService, "__children").Sim = buildDir("tests/sim", "Sim", services.TestService)
 
 local game = setmetatable({}, {
 	__index = {
@@ -164,6 +167,14 @@ vrequire = function(target)
 	loading[path] = nil
 	cache[path] = result
 	return result
+end
+
+-- Rapport du simulateur économique : `lune run tests/run.luau report` ---------------------------
+
+if process.args[1] == "report" then
+	local report = vrequire(rawget(rawget(services.TestService, "__children").Sim, "__children").Report)
+	report()
+	process.exit(0)
 end
 
 -- Exécution des specs --------------------------------------------------------------------------

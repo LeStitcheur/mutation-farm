@@ -51,19 +51,66 @@ et versionné (commit/tag Git). Pas de développement simultané de plusieurs sy
 - [ ] Manuel (protocole `docs/TESTING.md` §2.4) : station à 2 joueurs, reconnexion, persistance réelle de la flotte,
       station au toucher et à la manette
 
-## Phase 3 — Croissance de la ferme
+## Phase 3 — Rebirth, prestige et progression exponentielle (branche `phase-3/progression`)
+
+Cahier des charges du 2026-11-21 (remplace l'ancienne Phase 3 « Croissance de la ferme », reportée en Phase 4, et
+avance la Phase 5). Détail : `docs/PROGRESSION.md`.
+
+**Jalon A — Rebirth ✅ (2026-11-21 ; validations manuelles restantes ci-dessous)**
+- [x] Schéma v2 : compteurs de cycle, révision de progression, `totalRebirths`, migration v1 → v2 défensive,
+      quarantaine au lieu de toute suppression (`docs/DATA_MIGRATIONS.md`)
+- [x] Formules pures : seuil `100 000 × 3,2ⁿ` sur les Coins gagnés du cycle, `M(R) = 1 + 0,35 R + 0,015 R²`,
+      Mutation Essence (`ProgressionMath`, `ProgressionConfig`)
+- [x] Transition atomique et idempotente (`Resets.rebirth`, révision), multiplicateur appliqué aux ventes et bonus
+- [x] RebirthService (verrou par joueur, débit, replantation, flotte vidée, sauvegarde immédiate) ; DevService (Studio)
+- [x] Panneau Rebirth (progression, récompense, multiplicateurs, perdu / conservé, confirmation en 2 étapes ;
+      R / L1 / B) ; `PanelHub` (un panneau à la fois, chat masqué)
+- [x] Tests Lune : 188 (seuils, multiplicateur, Essence, conservation champ par champ, 100 requêtes = 1 récompense,
+      récolte/drone concurrents, sauvegardes simulées cohérentes, migration, quarantaine)
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.5) : 15 contrôles ✅ (dont rebirth complet, vente ×1,365 = 122,
+      10 requêtes = 1 récompense, révision périmée refusée au seuil), manette simulée partielle
+- [ ] Manuel : persistance réelle d'un rebirth, mobile, manette (`docs/TESTING.md` §2.4)
+
+**Jalon B — Prestige ✅ (2026-11-21 ; validations manuelles restantes ci-dessous)**
+- [x] Conditions du cahier des charges (5 / 1e7, 8 / 1e8, 12 / 1e9) puis exponentielles et configurables,
+      `Mp(P) = 1 + 0,5 P + 0,08 P²`, Primal Cores (`ProgressionMath`, `ProgressionConfig.Prestige`)
+- [x] Transition atomique et idempotente `Resets.prestige` (révision ; parcelles, rebirths, Essence, améliorations de
+      rebirth et Coins des cycles réinitialisés ; droits Robux, Mutadex, cosmétiques, permanents conservés)
+- [x] `ProgressionService` (exécution commune, verrou partagé rebirth/prestige), `PrestigeService` ; `RebirthService`
+      ramené sur le même chemin
+- [x] Panneau Prestige (conditions, Primal Cores, multiplicateurs, perdu / conservé, confirmation renforcée : case
+      « J'ai compris » + 3 s ; P / R1 / B) sur `UI/ConfirmPanel`, commun avec le panneau Rebirth
+- [x] Tests Lune : 205 (dont `Prestige.spec`, 11 tests, et 8 tests de formules) ; invariant 12
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.6) : 2 prestiges complets, confirmation renforcée, vente ×1,58 = 142,
+      10 requêtes croisées rebirth/prestige = 1 transition ; 1 défaut d'affichage corrigé ; manette simulée partielle
+- [ ] Manuel : persistance réelle d'un prestige, mobile, manette (`docs/TESTING.md` §2.4)
+
+**Jalon C — Améliorations et équilibrage ✅ (2026-11-21 ; validations manuelles restantes ci-dessous)**
+- [x] Arbre Mutation Essence (5) et arbre Primal Cores (6) : identifiants stables, coûts configurables, niveaux
+      maximum, formules, plafonds (`UpgradeConfig`, `Upgrades`), effets branchés (revenu, sac, pousse, chance,
+      drones, Essence, graines gardées, drones offerts)
+- [x] `UpgradeService` (validation serveur, niveau attendu, refus pendant une transition) ; quarantaine des niveaux
+      malformés au chargement
+- [x] Panneau Améliorations à deux onglets (`UpgradeController` sur `UI/ModalPanel`, base désormais commune avec
+      `ConfirmPanel`) ; U / L2 / B ; menu à 4 boutons
+- [x] Simulateur économique déterministe à 5 profils (`tests/sim`), rapport (`docs/ECONOMY.md` §8), invariants
+      testés ; défaut de planification des drones trouvé et corrigé ; Carotte et Tomate inchangées
+- [x] Tests Lune : 227 (dont `Upgrades.spec` 16, `EconomySim.spec` 6)
+- [x] Documentation (ARCHITECTURE, ECONOMY §8, TESTING, PROGRESSION §4–5, DATA_MIGRATIONS)
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.7) : achats Essence et Primal Cores, effets (sac 50, vente
+      ×1,1 = 135, drone offert), refus serveur, Essence conservée au rebirth et perdue au prestige, panneaux
+      Rebirth / Prestige refactorés revalidés
+- [ ] Manuel : améliorations au toucher et à la manette, persistance réelle (`docs/TESTING.md` §2.4)
+
+## Phase 4 — Croissance de la ferme et automatisation
 - [ ] Améliorations normales (vitesse, valeur, sac) — UpgradeService + UI
 - [ ] Extensions latérales `west`/`east`, terrasses (escaliers, déblocage)
 - [ ] Événement Floraison dorée
-- [ ] Simulateur d'économie Lune + rééquilibrage
-
-## Phase 4 — Automatisation
 - [ ] AutomationService : drones collecteurs (simulation agrégée), vente auto (drones récolteurs : Phase 2 jalon B)
 - [ ] Production hors ligne plafonnée à 2 h, écran « Pendant ton absence »
 
 ## Phase 5 — Rebirth & Prestige
-- [ ] RebirthService, PrestigeService (règles `Resets` déjà testées)
-- [ ] Rebirth Tokens / Primal Cores, upgrades de rebirth et permanents, UI
+- Avancée en Phase 3 (voir ci-dessus).
 
 ## Phase 6 — Monétisation
 - [ ] PurchaseService : Game Passes (confort/cosmétique), Developer Products limités

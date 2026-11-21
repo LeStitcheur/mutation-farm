@@ -1,0 +1,44 @@
+# Vérification continue : la même commande que localement (scripts/check.ps1) sur chaque PR et chaque push sur main.
+# Runner Windows : réutilise tels quels scripts/setup-tools.ps1 (outils épinglés, binaires Windows) et check.ps1.
+# Les fins de ligne restent LF au checkout (.gitattributes), comme l'exige StyLua.
+name: Vérifications
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check.ps1 (format, lint, typage strict, tests Lune, build)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Récupération du code
+        uses: actions/checkout@v4
+
+      - name: Cache de la chaîne d'outils
+        id: tools-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            tools/bin
+            tools/defs
+          key: tools-${{ runner.os }}-${{ hashFiles('scripts/setup-tools.ps1') }}
+
+      - name: Installation des outils épinglés (rojo, stylua, selene, lune, luau-lsp)
+        if: steps.tools-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: ./scripts/setup-tools.ps1
+
+      - name: Vérifications (scripts/check.ps1)
+        shell: pwsh
+        run: ./scripts/check.ps1

@@ -12,6 +12,7 @@ local BigNum = require(Shared.Util.BigNum)
 local Economy = require(Shared.Util.Economy)
 local Format = require(Shared.Util.Format)
 local Inventory = require(Shared.Util.Inventory)
+local ProgressionMath = require(Shared.Util.ProgressionMath)
 local DataService = require(script.Parent.DataService)
 local Notifier = require(script.Parent.Parent.Infra.Notifier)
 
@@ -21,14 +22,15 @@ local lastSell: { [Player]: number } = {}
 
 local EconomyService = {}
 
--- Crédite des Coins (montant ≥ 0). Comptabilisé dans stats.coinsEarned.
+-- Crédite des Coins GAGNÉS en jeu (montant ≥ 0) : comptés dans l'historique et les cycles de rebirth/prestige.
+-- (Les futurs crédits non gagnés — achats Robux, remboursements — ne devront pas passer par ici.)
 function EconomyService.AddCoins(player: Player, amount: BigNum): boolean
 	if BigNum.isNegative(amount) or not BigNum.isValid(amount) then
 		return false
 	end
 	return DataService.Update(player, function(data)
 		data.currencies.coins = BigNum.add(data.currencies.coins, amount)
-		data.stats.coinsEarned = BigNum.add(data.stats.coinsEarned, amount)
+		ProgressionMath.recordEarnings(data, amount)
 	end)
 end
 
@@ -65,10 +67,12 @@ function EconomyService.SellAll(player: Player): BigNum?
 		Notifier.sendThrottled(player, "bag_empty", 2, "info", "Ton sac est vide : récolte des plantes mûres !")
 		return nil
 	end
-	local total = Economy.sellValue(data.bag.items)
+	-- Total calculé DANS le mutateur (sac et multiplicateur lus dans le même état atomique, même face à un rebirth).
+	local total = BigNum.zero()
 	DataService.Update(player, function(d)
+		total = Economy.sellValue(d.bag.items, ProgressionMath.incomeMultiplier(d))
 		d.currencies.coins = BigNum.add(d.currencies.coins, total)
-		d.stats.coinsEarned = BigNum.add(d.stats.coinsEarned, total)
+		ProgressionMath.recordEarnings(d, total)
 		d.stats.sells += 1
 		d.bag.items = {}
 	end)

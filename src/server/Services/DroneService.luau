@@ -122,7 +122,7 @@ local function layoutDrones(player: Player, runtime: Runtime)
 			def = def,
 			home = home,
 			anchor = anchor,
-			nextAt = now + def.interval * index / #fleet,
+			nextAt = now + DroneLogic.interval(def, data) * index / #fleet,
 			status = "idle",
 		})
 	end
@@ -232,6 +232,15 @@ function DroneService.Buy(player: Player, droneId: string): (boolean, string?)
 	return true, nil
 end
 
+-- Resynchronise la flotte avec la donnée (après un rebirth : drones retirés, invites remises à zéro).
+function DroneService.Refresh(player: Player)
+	local runtime = runtimes[player]
+	if runtime then
+		layoutDrones(player, runtime)
+		refreshPrompts(player, runtime)
+	end
+end
+
 local function tick()
 	local now = Workspace:GetServerTimeNow()
 	for player, runtime in runtimes do
@@ -244,7 +253,9 @@ local function tick()
 			if now < drone.nextAt then
 				continue
 			end
-			drone.nextAt = now + drone.def.interval
+			-- Planifié depuis l'échéance précédente (et non `now`) : un intervalle de 3,8 s ne s'arrondit pas au pas de
+			-- la boucle (0,25 s → 4 s). Améliorations d'efficacité ; délai de grâce inchangé.
+			drone.nextAt = math.max(drone.nextAt + DroneLogic.interval(drone.def, data), now)
 			local status: DroneStatus = if Inventory.isFull(data.bag.items, Economy.bagCapacity(data))
 				then "bag_full"
 				else "idle"

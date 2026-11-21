@@ -7,6 +7,7 @@ local PlantConfig = require(script.Parent.Parent.Config.PlantConfig)
 local MutationConfig = require(script.Parent.Parent.Config.MutationConfig)
 local BigNum = require(script.Parent.BigNum)
 local Inventory = require(script.Parent.Inventory)
+local Upgrades = require(script.Parent.Upgrades)
 
 type BigNum = Types.BigNum
 type PlayerData = Types.PlayerData
@@ -73,9 +74,16 @@ function Economy.precisionBonus(plantId: string, tier: Types.PrecisionTier): Big
 	return BigNum.fromNumber(math.floor(plant.baseValue * Economy.precisionFraction(tier) + 1e-9))
 end
 
-function Economy.bagCapacity(_data: PlayerData): number
-	-- Phase 3 : + améliorations de sac, Game Pass Sac ×2.
-	return GameConfig.Bag.BaseCapacity
+-- Capacité du sac : base + améliorations (Capacité du sac). Phase 6 : Game Pass Sac ×2.
+function Economy.bagCapacity(data: PlayerData): number
+	return GameConfig.Bag.BaseCapacity + Upgrades.bagBonus(data)
+end
+
+-- Durée de pousse effective d'une nouvelle culture (figée à la plantation) : base × améliorations de croissance.
+function Economy.growTime(data: PlayerData, plantId: string): number
+	local plant = PlantConfig.get(plantId)
+	assert(plant, "Economy.growTime : plante inconnue " .. plantId)
+	return plant.growTime * Upgrades.growthFactor(data)
 end
 
 function Economy.bagCount(data: PlayerData): number
@@ -106,28 +114,6 @@ function Economy.incomePerTileSecond(plant: Types.PlantDef): number
 	return plant.baseValue / plant.growTime
 end
 
--- Phase 5 — formules contractuelles (docs/ECONOMY.md §4).
-function Economy.rebirthCost(rebirths: number): BigNum
-	local config = GameConfig.Rebirth
-	return BigNum.fromExponential(config.BaseCost, config.CostGrowth, rebirths)
-end
-
-function Economy.rebirthMultiplier(rebirths: number): number
-	return GameConfig.Rebirth.MultiplierBase ^ rebirths
-end
-
-function Economy.prestigeRequirement(prestiges: number): number
-	local config = GameConfig.Prestige
-	return config.BaseRebirths + config.RebirthsPerPrestige * prestiges
-end
-
-function Economy.prestigeCores(rebirths: number, prestiges: number): number
-	local required = Economy.prestigeRequirement(prestiges)
-	if rebirths < required then
-		return 0
-	end
-	local config = GameConfig.Prestige
-	return math.floor(config.CoreBase * config.CoreGrowth ^ (rebirths - required) + 1e-9)
-end
+-- Rebirth, prestige et multiplicateurs de progression : Util/ProgressionMath (Phase 3).
 
 return Economy

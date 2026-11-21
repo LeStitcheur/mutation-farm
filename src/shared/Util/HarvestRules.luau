@@ -11,6 +11,7 @@ local Economy = require(script.Parent.Economy)
 local FarmLayout = require(script.Parent.FarmLayout)
 local Growth = require(script.Parent.Growth)
 local Inventory = require(script.Parent.Inventory)
+local ProgressionMath = require(script.Parent.ProgressionMath)
 
 type PlayerData = Types.PlayerData
 
@@ -60,7 +61,10 @@ function HarvestRules.apply(data: PlayerData, tileId: string, now: number, sourc
 		data.stats.perfectHarvests += 1
 	end
 	data.farm.tiles[tileId] = nil
-	local bonus = if tier == "normal" then BigNum.zero() else Economy.precisionBonus(tile.plantId, tier)
+	-- Bonus de précision × multiplicateur de revenu (rebirth…), appliqué une seule fois puis tronqué.
+	local bonus = if tier == "normal"
+		then BigNum.zero()
+		else BigNum.mulNumber(Economy.precisionBonus(tile.plantId, tier), ProgressionMath.incomeMultiplier(data))
 	return { plantId = tile.plantId, mutation = mutation, tier = tier, bonus = bonus, itemKey = key }
 end
 
