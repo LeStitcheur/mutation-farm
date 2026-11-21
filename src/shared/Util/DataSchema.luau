@@ -15,12 +15,36 @@ local FarmLayout = require(script.Parent.FarmLayout)
 type PlayerData = Types.PlayerData
 type Migration = (any) -> any
 
-local VERSION = 1
+local VERSION = 2
 local MAX_DEPTH = 16
 
--- MIGRATIONS[v] transforme une donnée de version v-1 en version v.
+-- Copie défensive d'un BigNum stocké (zéro si absent ou corrompu).
+local function storedBigNum(value: any): any
+	return if BigNum.isValid(value) then Deep.copy(value) else BigNum.zero()
+end
+
+-- MIGRATIONS[v] transforme une donnée de version v-1 en version v. Elles ne suppriment jamais de champ.
+-- Documentation : docs/DATA_MIGRATIONS.md.
 local MIGRATIONS: { [number]: Migration } = {
-	-- [2] = function(data) ... return data end,
+	-- v2 (Phase 3, rebirth) : compteurs de cycle, révision de progression, historique des rebirths, quarantaine.
+	-- Aucun rebirth/prestige n'existait en v1 : tous les Coins gagnés appartiennent au cycle en cours.
+	[2] = function(data: any): any
+		if type(data.progression) ~= "table" then
+			data.progression = {}
+		end
+		if type(data.stats) ~= "table" then
+			data.stats = {}
+		end
+		local progression = data.progression
+		local rebirths = if type(progression.rebirths) == "number" then progression.rebirths else 0
+		local prestiges = if type(progression.prestiges) == "number" then progression.prestiges else 0
+		local earned = storedBigNum(data.stats.coinsEarned)
+		progression.revision = 0
+		progression.cycleCoins = if rebirths == 0 and prestiges == 0 then Deep.copy(earned) else BigNum.zero()
+		progression.prestigeCoins = if prestiges == 0 then Deep.copy(earned) else BigNum.zero()
+		data.stats.totalRebirths = rebirths
+		return data
+	end,
 }
 
 local DataSchema = {
@@ -58,6 +82,9 @@ function DataSchema.template(now: number): PlayerData
 		progression = {
 			rebirths = 0,
 			prestiges = 0,
+			revision = 0,
+			cycleCoins = BigNum.zero(),
+			prestigeCoins = BigNum.zero(),
 		},
 		mutadex = {},
 		cosmetics = {
@@ -74,11 +101,13 @@ function DataSchema.template(now: number): PlayerData
 			sells = 0,
 			coinsEarned = BigNum.zero(),
 			playTime = 0,
+			totalRebirths = 0,
 		},
 		receipts = {},
 		meta = {
 			createdAt = now,
 			lastSeen = now,
+			quarantine = {},
 		},
 	}
 end
@@ -119,27 +148,53 @@ local function isNonNegativeInteger(value: any): boolean
 	return type(value) == "number" and value == value and value >= 0 and value % 1 == 0 and value < math.huge
 end
 
+-- Met une donnée retirée ou corrigée en quarantaine (meta.quarantine, FIFO borné) et la signale.
+-- La valeur d'origine est conservée telle quelle si elle est sérialisable en JSON, sinon sous forme de texte.
+local function quarantine(data: PlayerData, notes: { string }, path: string, value: any, reason: string, now: number)
+	local entries = data.meta.quarantine
+	local safe = if DataSchema.validate(value) then Deep.copy(value) else tostring(value)
+	table.insert(entries, { path = path, value = safe, reason = reason, at = now })
+	while #entries > GameConfig.Data.MaxQuarantine do
+		table.remove(entries, 1)
+	end
+	table.insert(notes, string.format("%s : %s (mis en quarantaine)", path, reason))
+end
+
 -- Corrige les incohérences (config modifiée, valeurs corrompues). Retourne la liste des corrections.
-function DataSchema.sanitize(data: PlayerData): { string }
+-- Rien n'est supprimé silencieusement : toute valeur retirée ou remplacée part en quarantaine avec une note.
+function DataSchema.sanitize(data: PlayerData, now: number?): { string }
 	local notes: { string } = {}
+	local at = now or 0
+	if type(data.meta.quarantine) ~= "table" then
+		local previous = data.meta.quarantine
+		data.meta.quarantine = {}
+		quarantine(data, notes, "meta.quarantine", previous, "liste de quarantaine invalide", at)
+	end
 
 	for _, field in { "coins", "essence", "primalCores" } do
 		local currencies = data.currencies :: any
 		if not BigNum.isValid(currencies[field]) then
-			table.insert(notes, "currencies." .. field .. " invalide -> 0")
+			quarantine(data, notes, "currencies." .. field, currencies[field], "montant invalide -> 0", at)
 			currencies[field] = BigNum.zero()
 		end
 	end
 	if not BigNum.isValid(data.stats.coinsEarned) then
+		quarantine(data, notes, "stats.coinsEarned", data.stats.coinsEarned, "montant invalide -> 0", at)
 		data.stats.coinsEarned = BigNum.zero()
-		table.insert(notes, "stats.coinsEarned invalide -> 0")
+	end
+	for _, field in { "cycleCoins", "prestigeCoins" } do
+		local progression = data.progression :: any
+		if not BigNum.isValid(progression[field]) or BigNum.isNegative(progression[field]) then
+			quarantine(data, notes, "progression." .. field, progression[field], "montant invalide -> 0", at)
+			progression[field] = BigNum.zero()
+		end
 	end
 
 	-- Parcelles : uniquement des identifiants connus ; la parcelle principale est toujours débloquée.
-	for plotId in data.farm.plots do
+	for plotId, unlocked in data.farm.plots do
 		if not FarmLayout.getPlot(plotId) then
 			data.farm.plots[plotId] = nil
-			table.insert(notes, "parcelle inconnue retirée : " .. tostring(plotId))
+			quarantine(data, notes, "farm.plots." .. tostring(plotId), unlocked, "parcelle inconnue", at)
 		end
 	end
 	for plotId, unlocked in FarmLayout.defaultPlots() do
@@ -160,7 +215,14 @@ function DataSchema.sanitize(data: PlayerData): { string }
 			and FarmLayout.isTileUnlocked(data.farm.plots, tileId)
 		if not valid then
 			data.farm.tiles[tileId] = nil
-			table.insert(notes, "case invalide retirée : " .. tostring(tileId))
+			quarantine(
+				data,
+				notes,
+				"farm.tiles." .. tostring(tileId),
+				tile,
+				"culture invalide ou parcelle verrouillée",
+				at
+			)
 		end
 	end
 
@@ -168,21 +230,21 @@ function DataSchema.sanitize(data: PlayerData): { string }
 	for key, quantity in data.bag.items do
 		if not Economy.isValidItemKey(key) or not isNonNegativeInteger(quantity) or quantity == 0 then
 			data.bag.items[key] = nil
-			table.insert(notes, "objet invalide retiré : " .. tostring(key))
+			quarantine(data, notes, "bag.items." .. tostring(key), quantity, "objet inconnu ou quantité invalide", at)
 		end
 	end
 
 	-- Graines : identifiants connus, graine de départ toujours débloquée, sélection valide.
-	for plantId in data.seeds.unlocked do
+	for plantId, unlocked in data.seeds.unlocked do
 		if not PlantConfig.get(plantId) then
 			data.seeds.unlocked[plantId] = nil
-			table.insert(notes, "graine inconnue retirée : " .. tostring(plantId))
+			quarantine(data, notes, "seeds.unlocked." .. tostring(plantId), unlocked, "graine inconnue", at)
 		end
 	end
 	data.seeds.unlocked[GameConfig.StarterSeed] = true
 	if not data.seeds.unlocked[data.seeds.selected] then
+		quarantine(data, notes, "seeds.selected", data.seeds.selected, "graine non débloquée -> départ", at)
 		data.seeds.selected = GameConfig.StarterSeed
-		table.insert(notes, "graine sélectionnée invalide -> graine de départ")
 	end
 
 	-- Drones : types connus, nombres entiers strictement positifs, plafonnés à maxOwned.
@@ -190,34 +252,52 @@ function DataSchema.sanitize(data: PlayerData): { string }
 		local def = DroneConfig.get(droneId)
 		if not def or not isNonNegativeInteger(count) or count == 0 then
 			data.machines.drones[droneId] = nil
-			table.insert(notes, "drone invalide retiré : " .. tostring(droneId))
+			quarantine(
+				data,
+				notes,
+				"machines.drones." .. tostring(droneId),
+				count,
+				"drone inconnu ou nombre invalide",
+				at
+			)
 		elseif count > def.maxOwned then
+			quarantine(data, notes, "machines.drones." .. droneId, count, "au-delà du maximum -> plafonné", at)
 			data.machines.drones[droneId] = def.maxOwned
-			table.insert(notes, "drones plafonnés : " .. droneId)
 		end
 	end
 
 	-- Compteurs.
-	for _, field in { "rebirths", "prestiges" } do
-		local progression = data.progression :: any
-		if not isNonNegativeInteger(progression[field]) then
-			progression[field] = 0
-			table.insert(notes, "progression." .. field .. " invalide -> 0")
+	local counters: { { container: any, field: string, path: string } } = {
+		{ container = data.progression, field = "rebirths", path = "progression.rebirths" },
+		{ container = data.progression, field = "prestiges", path = "progression.prestiges" },
+		{ container = data.progression, field = "revision", path = "progression.revision" },
+		{ container = data.stats, field = "totalRebirths", path = "stats.totalRebirths" },
+		{ container = data.currencies, field = "rebirthTokens", path = "currencies.rebirthTokens" },
+	}
+	for _, counter in counters do
+		local value = counter.container[counter.field]
+		if not isNonNegativeInteger(value) then
+			quarantine(data, notes, counter.path, value, "compteur invalide -> 0", at)
+			counter.container[counter.field] = 0
 		end
-	end
-	if not isNonNegativeInteger(data.currencies.rebirthTokens) then
-		data.currencies.rebirthTokens = 0
 	end
 
-	-- Reçus : chaînes uniquement, FIFO borné.
+	-- Reçus : chaînes uniquement, FIFO borné (les plus anciens sont retirés en premier, avec une note).
 	local receipts: { string } = {}
-	for _, receipt in data.receipts do
+	for index, receipt in data.receipts do
 		if type(receipt) == "string" then
 			table.insert(receipts, receipt)
+		else
+			quarantine(data, notes, "receipts." .. tostring(index), receipt, "reçu non textuel", at)
 		end
 	end
+	local trimmed = 0
 	while #receipts > GameConfig.Data.MaxReceipts do
 		table.remove(receipts, 1)
+		trimmed += 1
+	end
+	if trimmed > 0 then
+		table.insert(notes, string.format("receipts : %d reçu(s) les plus anciens retirés (FIFO borné)", trimmed))
 	end
 	data.receipts = receipts
 
@@ -249,7 +329,7 @@ function DataSchema.load(raw: any, now: number): (PlayerData?, LoadError?, { str
 	DataSchema.reconcile(data, DataSchema.template(now) :: any)
 	data.version = VERSION
 	local typed = data :: PlayerData
-	for _, note in DataSchema.sanitize(typed) do
+	for _, note in DataSchema.sanitize(typed, now) do
 		table.insert(notes, note)
 	end
 	return typed, nil, notes

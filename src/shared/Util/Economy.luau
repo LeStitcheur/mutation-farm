@@ -106,28 +106,6 @@ function Economy.incomePerTileSecond(plant: Types.PlantDef): number
 	return plant.baseValue / plant.growTime
 end
 
--- Phase 5 — formules contractuelles (docs/ECONOMY.md §4).
-function Economy.rebirthCost(rebirths: number): BigNum
-	local config = GameConfig.Rebirth
-	return BigNum.fromExponential(config.BaseCost, config.CostGrowth, rebirths)
-end
-
-function Economy.rebirthMultiplier(rebirths: number): number
-	return GameConfig.Rebirth.MultiplierBase ^ rebirths
-end
-
-function Economy.prestigeRequirement(prestiges: number): number
-	local config = GameConfig.Prestige
-	return config.BaseRebirths + config.RebirthsPerPrestige * prestiges
-end
-
-function Economy.prestigeCores(rebirths: number, prestiges: number): number
-	local required = Economy.prestigeRequirement(prestiges)
-	if rebirths < required then
-		return 0
-	end
-	local config = GameConfig.Prestige
-	return math.floor(config.CoreBase * config.CoreGrowth ^ (rebirths - required) + 1e-9)
-end
+-- Rebirth, prestige et multiplicateurs de progression : Util/ProgressionMath (Phase 3).
 
 return Economy

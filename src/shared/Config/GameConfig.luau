@@ -58,24 +58,11 @@ local GameConfig = {
 		LoadMaxWait = 130,
 		SaveRetries = 3,
 		MaxReceipts = 200,
+		MaxQuarantine = 100, -- entrées conservées dans meta.quarantine (FIFO)
 		ShutdownTimeout = 25,
 		ForceMemoryStoreInStudio = false, -- true : jamais de DataStore réel en Studio
 	},
-
-	-- Formules contractuelles Phase 5 (voir docs/ECONOMY.md §4).
-	Rebirth = {
-		BaseCost = 5e7,
-		CostGrowth = 6,
-		MultiplierBase = 1.5,
-		TokensPerRebirth = 1,
-	},
-
-	Prestige = {
-		BaseRebirths = 8,
-		RebirthsPerPrestige = 4,
-		CoreBase = 2,
-		CoreGrowth = 1.35,
-	},
+	-- Rebirth, prestige et améliorations : Config/ProgressionConfig (Phase 3).
 }
 
 return Deep.freeze(GameConfig)

@@ -93,30 +93,5 @@ return function()
 		end)
 	end)
 
-	describe("rebirth et prestige (contrats Phase 5)", function()
-		it("coût de rebirth exact et strictement croissant", function()
-			expect(Economy.rebirthCost(0).m).to.equal(5e7)
-			expect(Economy.rebirthCost(1).m).to.equal(3e8)
-			for rebirths = 0, 40 do
-				expect(BigNum.lt(Economy.rebirthCost(rebirths), Economy.rebirthCost(rebirths + 1))).to.equal(true)
-			end
-		end)
-
-		it("le coût croît plus vite que le multiplicateur (invariant 7)", function()
-			for rebirths = 0, 20 do
-				local costGrowth = BigNum.ratio(Economy.rebirthCost(rebirths + 1), Economy.rebirthCost(rebirths))
-				local multiplierGrowth = Economy.rebirthMultiplier(rebirths + 1) / Economy.rebirthMultiplier(rebirths)
-				expect(costGrowth > multiplierGrowth).to.equal(true)
-			end
-		end)
-
-		it("calcule les Primal Cores à partir du seuil", function()
-			expect(Economy.prestigeRequirement(0)).to.equal(8)
-			expect(Economy.prestigeRequirement(1)).to.equal(12)
-			expect(Economy.prestigeCores(7, 0)).to.equal(0)
-			expect(Economy.prestigeCores(8, 0)).to.equal(2)
-			expect(Economy.prestigeCores(10, 0)).to.equal(3)
-			expect(Economy.prestigeCores(11, 1)).to.equal(0)
-		end)
-	end)
+	-- Rebirth/prestige : tests/specs/Progression.spec.luau (contrat Phase 3).
 end

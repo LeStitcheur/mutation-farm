@@ -25,7 +25,7 @@ export type PlayerData = {
 		coins: BigNum,
 		essence: BigNum,
 		primalCores: BigNum,
-		rebirthTokens: number,
+		rebirthTokens: number, -- obsolète (ancien contrat Phase 5), conservé tel quel ; plus utilisé
 	},
 	farm: {
 		plots: { [PlotId]: boolean },
@@ -47,8 +47,11 @@ export type PlayerData = {
 		drones: { [string]: number },
 	},
 	progression: {
-		rebirths: number,
-		prestiges: number,
+		rebirths: number, -- rebirths depuis le dernier prestige (n des seuils, R du multiplicateur)
+		prestiges: number, -- prestiges réalisés (jamais réinitialisé)
+		revision: number, -- +1 à chaque rebirth/prestige : invalide toute opération lancée avant le reset
+		cycleCoins: BigNum, -- Coins gagnés depuis le dernier rebirth (seuil de rebirth)
+		prestigeCoins: BigNum, -- Coins gagnés depuis le dernier prestige (seuil de prestige)
 	},
 	mutadex: { [ItemKey]: number }, -- découverte -> timestamp Unix
 	cosmetics: {
@@ -65,12 +68,22 @@ export type PlayerData = {
 		sells: number,
 		coinsEarned: BigNum,
 		playTime: number,
+		totalRebirths: number, -- historique (jamais réinitialisé)
 	},
 	receipts: { string }, -- PurchaseId traités (FIFO borné)
 	meta: {
 		createdAt: number,
 		lastSeen: number,
+		quarantine: { QuarantineEntry }, -- données retirées par l'assainissement, conservées pour récupération
 	},
+}
+
+-- Donnée inconnue ou incompatible mise de côté au chargement (jamais supprimée silencieusement).
+export type QuarantineEntry = {
+	path: string, -- ex. "farm.tiles.main:2"
+	value: any, -- valeur d'origine si sérialisable en JSON, sinon sa représentation texte
+	reason: string,
+	at: number, -- secondes Unix
 }
 
 -- Vue répliquée au client (sous-ensemble de PlayerData).
@@ -85,6 +98,8 @@ export type ClientState = {
 	selectedSeed: PlantId,
 	rebirths: number,
 	prestiges: number,
+	revision: number,
+	cycleCoins: BigNum,
 	harvests: number,
 	perfectHarvests: number,
 }
