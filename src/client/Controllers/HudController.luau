@@ -528,7 +528,8 @@ function HudController.Init()
 		Name = "Menu",
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 12, 0.5, 0),
-		Size = UDim2.fromOffset(170, 130),
+		Size = UDim2.fromOffset(170, 0),
+		AutomaticSize = Enum.AutomaticSize.Y, -- Graines, Rebirth, Prestige… (boutons ajoutés par les contrôleurs)
 		BackgroundTransparency = 1,
 		Parent = hud,
 	}, { Builder.list(Enum.FillDirection.Vertical, 10) }) :: Frame

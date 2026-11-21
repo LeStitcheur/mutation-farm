@@ -100,6 +100,7 @@ export type ClientState = {
 	prestiges: number,
 	revision: number,
 	cycleCoins: BigNum,
+	prestigeCoins: BigNum,
 	harvests: number,
 	perfectHarvests: number,
 }

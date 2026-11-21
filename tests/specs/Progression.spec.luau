@@ -126,11 +126,129 @@ return function()
 			end
 		end)
 
-		it("le multiplicateur de revenu suit les rebirths du cycle", function()
+		it("le multiplicateur de revenu = rebirth du cycle × prestige", function()
 			local data = DataSchema.template(0)
 			expect(ProgressionMath.incomeMultiplier(data)).to.equal(1)
 			data.progression.rebirths = 2
 			expect(ProgressionMath.incomeMultiplier(data)).to.be.near(1.76, 1e-12)
+			data.progression.prestiges = 1
+			expect(ProgressionMath.incomeMultiplier(data)).to.be.near(1.76 * 1.58, 1e-12)
+			local preview = ProgressionMath.rebirthPreview(data)
+			expect(preview.multiplier).to.be.near(1.76 * 1.58, 1e-12)
+			expect(preview.nextMultiplier).to.be.near(2.185 * 1.58, 1e-12)
+		end)
+	end)
+
+	describe("prestige : conditions", function()
+		it("cahier des charges : 5 rebirths / 1e7, 8 / 1e8, 12 / 1e9, puis 17 / 1e10 et 23 / 1e11", function()
+			local expected = {
+				{ 5, 1e7 },
+				{ 8, 1e8 },
+				{ 12, 1e9 },
+				{ 17, 1e10 },
+				{ 23, 1e11 },
+			}
+			for p, pair in expected do
+				expect(ProgressionMath.prestigeRebirthsRequired(p - 1)).to.equal(pair[1])
+				expect(BigNum.eq(ProgressionMath.prestigeCoinsRequired(p - 1), exact(pair[2]))).to.equal(true)
+			end
+		end)
+
+		it(
+			"croissance stricte des deux conditions et Coins exponentiels jusqu'à p = 60 (au-delà de 10¹⁵)",
+			function()
+				for p = 0, 59 do
+					local rebirthsNow = ProgressionMath.prestigeRebirthsRequired(p)
+					expect(ProgressionMath.prestigeRebirthsRequired(p + 1) > rebirthsNow).to.equal(true)
+					local current = ProgressionMath.prestigeCoinsRequired(p)
+					local nextValue = ProgressionMath.prestigeCoinsRequired(p + 1)
+					expect(BigNum.gt(nextValue, current)).to.equal(true)
+					expect(BigNum.log10(current)).to.be.near(7 + p, 1e-9)
+				end
+			end
+		)
+
+		it("rejette un nombre de prestiges invalide", function()
+			for _, bad in { -1, 0.5, 0 / 0 } do
+				expect(function()
+					ProgressionMath.prestigeCoinsRequired(bad)
+				end).to.throw()
+				expect(function()
+					ProgressionMath.prestigeMultiplier(bad)
+				end).to.throw()
+			end
+		end)
+
+		it("les deux conditions sont requises (rebirths d'abord, puis Coins gagnés depuis le prestige)", function()
+			local data = DataSchema.template(0)
+			data.currencies.coins = exact(1e12) -- le solde ne compte jamais
+			data.progression.rebirths = 4
+			data.progression.prestigeCoins = exact(1e12)
+			expect(select(2, ProgressionMath.canPrestige(data))).to.equal("not_enough_rebirths")
+			data.progression.rebirths = 5
+			data.progression.prestigeCoins = exact(9999999)
+			expect(select(2, ProgressionMath.canPrestige(data))).to.equal("not_enough_coins")
+			data.progression.prestigeCoins = exact(1e7)
+			expect((ProgressionMath.canPrestige(data))).to.equal(true)
+
+			data.progression.prestiges = 1 -- prestige n° 2 : 8 rebirths et 1e8
+			expect(select(2, ProgressionMath.canPrestige(data))).to.equal("not_enough_rebirths")
+			data.progression.rebirths = 8
+			expect(select(2, ProgressionMath.canPrestige(data))).to.equal("not_enough_coins")
+			data.progression.prestigeCoins = exact(1e8)
+			expect((ProgressionMath.canPrestige(data))).to.equal(true)
+		end)
+	end)
+
+	describe("prestige : récompenses et multiplicateur", function()
+		it("1 + 0,5 P + 0,08 P²", function()
+			expect(ProgressionMath.prestigeMultiplier(0)).to.equal(1)
+			expect(ProgressionMath.prestigeMultiplier(1)).to.be.near(1.58, 1e-12)
+			expect(ProgressionMath.prestigeMultiplier(2)).to.be.near(2.32, 1e-12)
+			expect(ProgressionMath.prestigeMultiplier(3)).to.be.near(3.22, 1e-12)
+		end)
+
+		it("Primal Cores : 10 au minimum, +25 % par rebirth en plus (plafond ×2), croissants avec p", function()
+			expect(BigNum.isZero(ProgressionMath.prestigeCores(0, 4))).to.equal(true)
+			expect(BigNum.eq(ProgressionMath.prestigeCores(0, 5), exact(10))).to.equal(true)
+			expect(BigNum.eq(ProgressionMath.prestigeCores(0, 6), exact(12))).to.equal(true) -- 12,5
+			expect(BigNum.eq(ProgressionMath.prestigeCores(0, 9), exact(20))).to.equal(true)
+			expect(BigNum.eq(ProgressionMath.prestigeCores(0, 40), exact(20))).to.equal(true) -- plafond
+			expect(BigNum.eq(ProgressionMath.prestigeCores(1, 8), exact(16))).to.equal(true) -- 10 × 2^0,75
+			expect(BigNum.eq(ProgressionMath.prestigeCores(2, 12), exact(22))).to.equal(true) -- 10 × 3^0,75
+		end)
+
+		it("pas de cycle instantané : juste après un prestige, le revenu baisse (invariant 12)", function()
+			for p = 0, 30 do
+				local before = ProgressionMath.rebirthMultiplier(ProgressionMath.prestigeRebirthsRequired(p))
+					* ProgressionMath.prestigeMultiplier(p)
+				expect(ProgressionMath.prestigeMultiplier(p + 1) < before).to.equal(true)
+			end
+		end)
+
+		it("l'aperçu donne conditions, progression, Primal Cores et multiplicateurs", function()
+			local data = DataSchema.template(0)
+			data.progression.rebirths = 3
+			data.progression.prestigeCoins = exact(5e6)
+			local preview = ProgressionMath.prestigePreview(data)
+			expect(preview.prestiges).to.equal(0)
+			expect(preview.rebirthsRequired).to.equal(5)
+			expect(preview.coinsProgress).to.be.near(0.5, 1e-12)
+			expect(preview.eligible).to.equal(false)
+			expect(preview.failure).to.equal("not_enough_rebirths")
+			expect(BigNum.isZero(preview.cores)).to.equal(true)
+			expect(preview.prestigeMultiplier).to.equal(1)
+			expect(preview.nextPrestigeMultiplier).to.be.near(1.58, 1e-12)
+			expect(preview.incomeMultiplier).to.be.near(2.185, 1e-12)
+			expect(preview.nextIncomeMultiplier).to.be.near(1.58, 1e-12)
+
+			data.progression.rebirths = 5
+			data.progression.prestigeCoins = exact(2e7)
+			local ready = ProgressionMath.prestigePreview(data)
+			expect(ready.eligible).to.equal(true)
+			expect(ready.failure).to.equal(nil)
+			expect(BigNum.eq(ready.cores, exact(10))).to.equal(true)
+			expect(ready.coinsProgress).to.equal(1)
 		end)
 	end)
 end

@@ -18,7 +18,27 @@ type PlayerData = Types.PlayerData
 local EXACT_LIMIT = 10
 local FLOAT_TOLERANCE = 1e-6
 
+-- 1e7 × 10^p reste un entier exact (< 1e15) jusqu'à p = 7 ; au-delà : BigNum par logarithmes.
+local PRESTIGE_EXACT_LIMIT = 7
+
 export type RebirthFailure = "below_threshold"
+export type PrestigeFailure = "not_enough_rebirths" | "not_enough_coins"
+
+export type PrestigePreview = {
+	prestiges: number, -- P actuel
+	rebirths: number,
+	rebirthsRequired: number,
+	prestigeCoins: BigNum,
+	coinsRequired: BigNum,
+	coinsProgress: number, -- [0, 1]
+	eligible: boolean,
+	failure: PrestigeFailure?,
+	cores: BigNum, -- Primal Cores obtenus si le prestige était fait maintenant (0 si non éligible)
+	prestigeMultiplier: number,
+	nextPrestigeMultiplier: number,
+	incomeMultiplier: number, -- revenu actuel (rebirth × prestige)
+	nextIncomeMultiplier: number, -- revenu juste après le prestige (rebirths remis à 0)
+}
 
 export type RebirthPreview = {
 	rebirths: number,
@@ -51,10 +71,19 @@ function ProgressionMath.rebirthMultiplier(rebirths: number): number
 	return 1 + config.MultiplierLinear * rebirths + config.MultiplierQuadratic * rebirths * rebirths
 end
 
--- Multiplicateur appliqué à toute rentrée de Coins gagnée (vente et bonus de précision).
--- Phase 3 jalon A : rebirth seulement (prestige et améliorations : jalons B et C).
+-- Multiplicateur de prestige après P prestiges : 1 + 0,5 P + 0,08 P² (jamais réinitialisé).
+function ProgressionMath.prestigeMultiplier(prestiges: number): number
+	assert(prestiges >= 0 and prestiges % 1 == 0, "ProgressionMath.prestigeMultiplier : P invalide")
+	local config = ProgressionConfig.Prestige
+	return 1 + config.MultiplierLinear * prestiges + config.MultiplierQuadratic * prestiges * prestiges
+end
+
+-- Multiplicateur appliqué à toute rentrée de Coins gagnée (vente et bonus de précision) : rebirth × prestige.
+-- Les améliorations (jalon C) s'ajouteront ici : point d'entrée unique.
 function ProgressionMath.incomeMultiplier(data: PlayerData): number
-	return ProgressionMath.rebirthMultiplier(data.progression.rebirths)
+	local progression = data.progression
+	return ProgressionMath.rebirthMultiplier(progression.rebirths)
+		* ProgressionMath.prestigeMultiplier(progression.prestiges)
 end
 
 -- Mutation Essence d'un rebirth fait avec `cycleCoins` gagnés pendant le cycle (0 sous le seuil).
@@ -85,6 +114,7 @@ function ProgressionMath.rebirthPreview(data: PlayerData): RebirthPreview
 	local n = progression.rebirths
 	local threshold = ProgressionMath.rebirthThreshold(n)
 	local eligible = ProgressionMath.canRebirth(data)
+	local prestigeFactor = ProgressionMath.prestigeMultiplier(progression.prestiges)
 	return {
 		rebirths = n,
 		threshold = threshold,
@@ -92,8 +122,74 @@ function ProgressionMath.rebirthPreview(data: PlayerData): RebirthPreview
 		progress = math.clamp(BigNum.ratio(progression.cycleCoins, threshold), 0, 1),
 		eligible = eligible,
 		essence = ProgressionMath.rebirthEssence(n, progression.cycleCoins),
-		multiplier = ProgressionMath.rebirthMultiplier(n),
-		nextMultiplier = ProgressionMath.rebirthMultiplier(n + 1),
+		multiplier = ProgressionMath.rebirthMultiplier(n) * prestigeFactor,
+		nextMultiplier = ProgressionMath.rebirthMultiplier(n + 1) * prestigeFactor,
+	}
+end
+
+-- Rebirths (depuis le dernier prestige) exigés pour le prestige n° p + 1 : 5, 8, 12, 17, 23…
+function ProgressionMath.prestigeRebirthsRequired(p: number): number
+	assert(p >= 0 and p % 1 == 0, "ProgressionMath.prestigeRebirthsRequired : p invalide")
+	local config = ProgressionConfig.Prestige
+	return config.RebirthsBase + config.RebirthsLinear * p + config.RebirthsQuadratic * p * (p - 1) // 2
+end
+
+-- Coins gagnés depuis le dernier prestige exigés pour le prestige n° p + 1 : 1e7 × 10^p.
+function ProgressionMath.prestigeCoinsRequired(p: number): BigNum
+	assert(p >= 0 and p % 1 == 0, "ProgressionMath.prestigeCoinsRequired : p invalide")
+	local config = ProgressionConfig.Prestige
+	if p <= PRESTIGE_EXACT_LIMIT then
+		return BigNum.fromNumber(math.ceil(config.CoinsBase * config.CoinsGrowth ^ p - FLOAT_TOLERANCE))
+	end
+	return BigNum.fromExponential(config.CoinsBase, config.CoinsGrowth, p)
+end
+
+-- Primal Cores d'un prestige n° p + 1 fait avec `rebirths` rebirths (0 sous le minimum de rebirths).
+function ProgressionMath.prestigeCores(p: number, rebirths: number): BigNum
+	local required = ProgressionMath.prestigeRebirthsRequired(p)
+	if rebirths < required then
+		return BigNum.zero()
+	end
+	local config = ProgressionConfig.Prestige
+	local extra = math.min(rebirths - required, config.CoresExtraRebirthCap)
+	local amount = config.CoresBase
+		* (1 + p) ^ config.CoresPrestigeExponent
+		* (1 + config.CoresExtraRebirthBonus * extra)
+	return BigNum.fromNumber(math.floor(amount + 1e-9))
+end
+
+-- Les deux conditions sont requises ; la première manquante est signalée (rebirths d'abord).
+function ProgressionMath.canPrestige(data: PlayerData): (boolean, PrestigeFailure?)
+	local progression = data.progression
+	if progression.rebirths < ProgressionMath.prestigeRebirthsRequired(progression.prestiges) then
+		return false, "not_enough_rebirths"
+	end
+	if BigNum.lt(progression.prestigeCoins, ProgressionMath.prestigeCoinsRequired(progression.prestiges)) then
+		return false, "not_enough_coins"
+	end
+	return true, nil
+end
+
+-- Données affichées par le panneau Prestige (mêmes règles que le serveur ; le serveur revalide tout).
+function ProgressionMath.prestigePreview(data: PlayerData): PrestigePreview
+	local progression = data.progression
+	local p = progression.prestiges
+	local coinsRequired = ProgressionMath.prestigeCoinsRequired(p)
+	local eligible: boolean, failure: PrestigeFailure? = ProgressionMath.canPrestige(data)
+	return {
+		prestiges = p,
+		rebirths = progression.rebirths,
+		rebirthsRequired = ProgressionMath.prestigeRebirthsRequired(p),
+		prestigeCoins = progression.prestigeCoins,
+		coinsRequired = coinsRequired,
+		coinsProgress = math.clamp(BigNum.ratio(progression.prestigeCoins, coinsRequired), 0, 1),
+		eligible = eligible,
+		failure = failure,
+		cores = if eligible then ProgressionMath.prestigeCores(p, progression.rebirths) else BigNum.zero(),
+		prestigeMultiplier = ProgressionMath.prestigeMultiplier(p),
+		nextPrestigeMultiplier = ProgressionMath.prestigeMultiplier(p + 1),
+		incomeMultiplier = ProgressionMath.incomeMultiplier(data),
+		nextIncomeMultiplier = ProgressionMath.prestigeMultiplier(p + 1),
 	}
 end
 

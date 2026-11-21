@@ -16,6 +16,7 @@ local Theme = {
 		Green = Color3.fromRGB(92, 184, 72),
 		Blue = Color3.fromRGB(74, 144, 226),
 		Gold = Color3.fromRGB(240, 172, 32),
+		Violet = Color3.fromRGB(146, 96, 214),
 		Red = Color3.fromRGB(224, 76, 76),
 		Grey = Color3.fromRGB(158, 150, 140),
 		BarBack = Color3.fromRGB(34, 24, 18),

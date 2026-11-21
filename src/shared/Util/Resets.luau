@@ -18,7 +18,16 @@ export type RebirthFailure = "stale_revision" | "below_threshold"
 export type RebirthOutcome = {
 	rebirths: number, -- rebirths depuis le dernier prestige, après ce rebirth
 	essence: BigNum, -- Mutation Essence gagnée
-	multiplier: number, -- nouveau multiplicateur de revenu
+	multiplier: number, -- nouveau multiplicateur de revenu (rebirth × prestige)
+	revision: number, -- nouvelle révision de progression
+}
+
+export type PrestigeFailure = "stale_revision" | "not_enough_rebirths" | "not_enough_coins"
+
+export type PrestigeOutcome = {
+	prestiges: number, -- prestiges réalisés, après ce prestige
+	cores: BigNum, -- Primal Cores gagnés
+	multiplier: number, -- nouveau multiplicateur de prestige (= revenu juste après, rebirths à 0)
 	revision: number, -- nouvelle révision de progression
 }
 
@@ -59,26 +68,42 @@ function Resets.rebirth(data: PlayerData, expectedRevision: number): (RebirthOut
 	return {
 		rebirths = progression.rebirths,
 		essence = essence,
-		multiplier = ProgressionMath.rebirthMultiplier(progression.rebirths),
+		multiplier = ProgressionMath.incomeMultiplier(data),
 		revision = progression.revision,
 	},
 		nil
 end
 
--- Prestige (règles complètes au jalon B) : reset de l'économie, des parcelles, des rebirths du cycle, de l'Essence et
--- des améliorations de rebirth. Conserve Primal Cores (+ gain), améliorations permanentes, Mutadex, cosmétiques,
--- familiers, reçus, statistiques historiques.
-function Resets.prestige(data: PlayerData, coresGained: number)
-	assert(coresGained >= 0 and coresGained % 1 == 0, "Resets.prestige : gain de Primal Cores invalide")
+-- Prestige : refusé si la révision ne correspond plus ou si une condition manque (rebirths, puis Coins gagnés depuis
+-- le dernier prestige). Réinitialise l'économie du cycle, les parcelles achetées, les rebirths du cycle, la Mutation
+-- Essence, les améliorations de rebirth et les Coins des deux cycles. Conserve Primal Cores (+ gain), améliorations
+-- permanentes, Mutadex, cosmétiques, familiers, reçus (droits Robux), statistiques historiques, prestiges.
+function Resets.prestige(data: PlayerData, expectedRevision: number): (PrestigeOutcome?, PrestigeFailure?)
+	local progression = data.progression
+	if progression.revision ~= expectedRevision then
+		return nil, "stale_revision"
+	end
+	local eligible: boolean, failure: ProgressionMath.PrestigeFailure? = ProgressionMath.canPrestige(data)
+	if not eligible then
+		return nil, failure
+	end
+	local cores = ProgressionMath.prestigeCores(progression.prestiges, progression.rebirths)
 	resetEconomy(data)
 	data.currencies.essence = BigNum.zero()
 	data.upgrades.rebirth = {}
 	data.farm.plots = FarmLayout.defaultPlots()
-	data.progression.rebirths = 0
-	data.progression.prestigeCoins = BigNum.zero()
-	data.progression.prestiges += 1
-	data.progression.revision += 1
-	data.currencies.primalCores = BigNum.add(data.currencies.primalCores, BigNum.fromNumber(coresGained))
+	progression.rebirths = 0
+	progression.prestigeCoins = BigNum.zero()
+	progression.prestiges += 1
+	progression.revision += 1
+	data.currencies.primalCores = BigNum.add(data.currencies.primalCores, cores)
+	return {
+		prestiges = progression.prestiges,
+		cores = cores,
+		multiplier = ProgressionMath.prestigeMultiplier(progression.prestiges),
+		revision = progression.revision,
+	},
+		nil
 end
 
 return Resets
