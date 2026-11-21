@@ -12,6 +12,8 @@ local FarmLayout = require(script.Parent.FarmLayout)
 local Growth = require(script.Parent.Growth)
 local Inventory = require(script.Parent.Inventory)
 local ProgressionMath = require(script.Parent.ProgressionMath)
+local Mutadex = require(script.Parent.Mutadex)
+local MutadexConfig = require(script.Parent.Parent.Config.MutadexConfig)
 
 type PlayerData = Types.PlayerData
 
@@ -23,6 +25,8 @@ export type Outcome = {
 	tier: Types.PrecisionTier,
 	bonus: Types.BigNum,
 	itemKey: string,
+	discovered: boolean, -- première récolte de cette combinaison (Mutadex)
+	milestones: { MutadexConfig.MilestoneDef }, -- paliers du Mutadex accordés par cette découverte
 }
 
 local HarvestRules = {}
@@ -65,7 +69,18 @@ function HarvestRules.apply(data: PlayerData, tileId: string, now: number, sourc
 	local bonus = if tier == "normal"
 		then BigNum.zero()
 		else BigNum.mulNumber(Economy.precisionBonus(tile.plantId, tier), ProgressionMath.incomeMultiplier(data))
-	return { plantId = tile.plantId, mutation = mutation, tier = tier, bonus = bonus, itemKey = key }
+	-- Mutadex : même mutateur que la récolte (joueur ou drone) → une culture est comptée une seule fois.
+	local discovered = Mutadex.record(data, tile.plantId, mutation, now)
+	local milestones = if discovered then Mutadex.claimMilestones(data, now) else {}
+	return {
+		plantId = tile.plantId,
+		mutation = mutation,
+		tier = tier,
+		bonus = bonus,
+		itemKey = key,
+		discovered = discovered,
+		milestones = milestones,
+	}
 end
 
 return table.freeze(HarvestRules)

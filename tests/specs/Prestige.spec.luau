@@ -39,7 +39,7 @@ return function()
 		data.progression.revision = REVISION
 		data.progression.cycleCoins = BigNum.fromNumber(5000)
 		data.progression.prestigeCoins = BigNum.fromNumber(2e7)
-		data.mutadex["carrot|shiny"] = 123
+		data.mutadex["carrot|shiny"] = { firstAt = 123, count = 4 }
 		data.cosmetics.owned.hat = true
 		data.cosmetics.equipped.head = "hat"
 		data.pets.owned.cat = 1

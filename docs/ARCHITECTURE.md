@@ -21,22 +21,24 @@ src/
   shared/   -> ReplicatedStorage.Shared
     Types.luau            Contrats de données (PlayerData, TileState, ClientState…)
     Net.luau              Noms et accès aux RemoteEvents
-    Config/               GameConfig, PlantConfig, MutationConfig, DroneConfig, ProgressionConfig, UpgradeConfig
+    Config/               GameConfig, PlantConfig, MutationConfig, DroneConfig, ProgressionConfig, UpgradeConfig,
+                          MutadexConfig
                           (gelées)
     Util/                 Logique pure : BigNum, Format, Growth, Economy, Inventory, MutationRoll,
                           DataSchema, Resets, FarmLayout, ClientView, Signal, Deep, SessionLock, SlotAllocator,
-                          HarvestRules, DroneLogic, ProgressionMath, Upgrades
+                          HarvestRules, DroneLogic, ProgressionMath, Upgrades, Mutadex
   server/   -> ServerScriptService.Server
     init.server.luau      Bootstrap des services
     Config/MutationOdds   Poids de mutation (jamais répliqués)
     Infra/                DataStoreAdapter, RateLimiter, Notifier
     Services/             DataService, EconomyService, PlantService, MutationService, FarmService, HarvestService,
                           DroneService, ProgressionService, RebirthService, PrestigeService,
-                          UpgradeService, DevService (Studio uniquement), SyncService
+                          UpgradeService, MutadexService, DevService (Studio uniquement), SyncService
   client/   -> StarterPlayer.StarterPlayerScripts.Client
     init.client.luau      Bootstrap des contrôleurs
     Controllers/          StateController, HudController, RebirthController, PrestigeController, UpgradeController,
-                          PlantRenderer, HarvestController, DroneRenderer
+                          MutadexController, PlantRenderer, HarvestController, DroneRenderer
+                          (menu latéral : grille de 2 colonnes, boutons ajoutés par les contrôleurs)
     UI/                   Theme, Builder, PanelHub (un panneau à la fois, chat masqué),
                           ModalPanel (base des panneaux du menu : bouton, touches, échelle, X / B, PanelHub),
                           ConfirmPanel (information + confirmation, sur ModalPanel : Rebirth et Prestige)
@@ -69,7 +71,8 @@ dépend de ces trois derniers.)
 | **EconomyService** | Coins, vente du sac (× multiplicateur de revenu rebirth × prestige, calculé dans le mutateur) ; tout gain alimente l'historique et les cycles (`ProgressionMath.recordEarnings`) | `AddCoins`, `TrySpendCoins`, `SellAll` |
 | **PlantService** | Graines (déblocage, sélection), durée de pousse effective | `GetSelectedSeed`, `ComputeGrowTime`, `UnlockSeed`, `SelectSeed` |
 | **FarmService** | Parcelles (attribution, construction), état des cases, replantation | `PlantTile`, `ReplantEmpty`, `GetTilePart`, `OwnsTile`, `GetPlotModel`, `GetPlotOrigin`, signal `PlotReady` |
-| **HarvestService** | Récoltes joueur et drone (règles communes `HarvestRules`), bonus de précision (joueur seulement), notification des mutations ≥ ×8 | `Harvest`, `HarvestForDrone` |
+| **HarvestService** | Récoltes joueur et drone (règles communes `HarvestRules`, qui enregistrent aussi le Mutadex dans le même mutateur), bonus de précision (joueur seulement), notification des mutations ≥ ×8 | `Harvest`, `HarvestForDrone` |
+| **MutadexService** | Annonces du Mutadex (Phase 4, jalon A) : premières découvertes et paliers accordés ; accorde au chargement les paliers déjà atteints | `OnHarvest` |
 | **SyncService** | Réplication de l'état joueur (coalescée, ≤ 10 Hz) | — |
 | **MutationService** | Tirage pondéré exclusif d'une mutation par plantation (`Random` serveur, poids `MutationOdds` × chance du joueur `Upgrades.luck`, poids mis en cache par niveau de chance) ; valide la configuration au démarrage | `Roll(luck?)` |
 | **DroneService** | Station d'achat (ProximityPrompt serveur, propriétaire seulement), flotte sauvegardée (`machines.drones`), **une** boucle serveur pour tous les drones (intervalle `DroneLogic.interval`, planifié depuis l'échéance précédente), ancres `FarmDrone` | `Buy`, `Refresh` |
@@ -96,7 +99,7 @@ traitement des joueurs). `DataService.Start` est appelé en **dernier** pour que
 | `UpgradePurchase` | C→S | `upgradeId: string`, `expectedLevel: number` (niveau affiché) | chaîne ≤ 32 du catalogue, entier 0..1 000, 4 req/s, aucune transition en cours ; niveau attendu = niveau courant (sinon refus sans effet), niveau < maximum, solde de la monnaie de l'arbre ≥ coût |
 | `ClientReady` | C→S | — | 1 req/s ; si profil chargé : renvoi de `LoadStatus` + `StateSync` (rattrape les événements émis avant la connexion des écouteurs) |
 | `StateSync` | S→C | `ClientState` | — |
-| `HarvestResult` | S→C | `{ tileId, plantId, mutation, tier, bonus, source }` (`source` : `"player"` / `"drone"`) | — |
+| `HarvestResult` | S→C | `{ tileId, plantId, mutation, tier, bonus, source, discovered }` (`source` : `"player"` / `"drone"` ; `discovered` : première récolte de la combinaison au Mutadex) | — |
 | `Notify` | S→C | `{ kind, text }` | — |
 | `LoadStatus` | S→C | `{ status, message }` | — |
 
@@ -147,9 +150,10 @@ multi-serveurs ; `DataService` ne fait que les appliquer dans `UpdateAsync`)
 1. **Chargement** : `UpdateAsync` ; si `session` appartient à un autre serveur et `heartbeat` < 120 s → verrou actif,
    la transformation retourne `nil` (aucune écriture), nouvelle tentative toutes les 5 s jusqu'à 130 s puis kick.
    Sinon on écrit notre `session` (vol du verrou périmé) et on lit `data`.
-2. **Migration** : `DataSchema.load` → migrations `version → VERSION` (schéma **v2** depuis la Phase 3), réconciliation
-   avec le gabarit, assainissement : toute valeur retirée ou corrigée part en quarantaine (`meta.quarantine`), jamais
-   supprimée silencieusement — voir `docs/DATA_MIGRATIONS.md`. Une version **future** (serveur obsolète) refuse le
+2. **Migration** : `DataSchema.load` → migrations `version → VERSION` (schéma **v3** depuis la Phase 4), réconciliation
+   avec le gabarit (valeurs d'un type incompatible consignées), assainissement : toute valeur retirée, remplacée ou
+   corrigée part en quarantaine (`meta.quarantine`), jamais supprimée silencieusement — voir
+   `docs/DATA_MIGRATIONS.md`. Une version **future** (serveur obsolète) refuse le
    chargement **sans écrire**.
 3. **Autosave** toutes les 45 s (rafraîchit `heartbeat`). Avant chaque écriture : copie profonde + `DataSchema.validate`
    (JSON-safe) ; donnée invalide = pas d'écriture.

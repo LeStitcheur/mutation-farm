@@ -25,7 +25,8 @@ Phase 3** avec un simulateur Lune.
 
 ## 2. Récolte et vente
 
-- **Sac** : capacité de base 40 objets (améliorations Phase 3).
+- **Sac** : capacité = 40 + amélioration « Capacité du sac » (Phase 3) + paliers du Mutadex (+5 à 25 %, +10 à 75 %,
+  Phase 4 ; `docs/MUTADEX.md`).
 - **Valeur de vente** = `valeurBase(plante) × multiplicateur(mutation) × M(R) × Mp(P) × A` où `M(R)` et `Mp(P)` sont
   les multiplicateurs de rebirth et de prestige (§4) et `A` celui des améliorations de valeur
   (`docs/PROGRESSION.md` §4), appliqués au total du sac et arrondis à l'inférieur.
@@ -190,6 +191,19 @@ tools/bin/lune.exe run tests/run.luau report
 (profil 4 poursuivi). Tous débloquent la graine suivante dès qu'elle est payable et vont vendre dès que le sac est
 plein ou que son contenu paie leur prochain achat. **Chaque valeur est la moyenne de 8 parties** (graines 1 à 8) :
 une partie seule est trop sensible aux mutations rares et à l'instant des déblocages.
+
+**Évolutions du modèle (Phase 4)**, rendues nécessaires par le Mutadex (ses places de sac modifiaient le rythme des
+ventes et faisaient apparaître des artefacts) — les tables ci-dessous datent de la Phase 3 et seront remesurées en
+fin de Phase 4 :
+- **Variabilité du joueur** : réaction ×[0,6 ; 1,4] et cadence ×[0,8 ; 1,2] autour du profil (générateur séparé à
+  graine fixe). Un joueur « métronome » gagnait ou perdait des bonus Parfait selon la phase des allers-retours.
+- **Nombres aléatoires communs** : un flux de tirages de mutation par plante ; la n-ième Citrouille reçoit le même
+  tirage dans deux parties comparées. Sans cela, une Divine changeait de plante d'une partie à l'autre (±30 % de
+  revenu sur 20 min), masquant l'effet réel des améliorations.
+- **Vente par habitude** : un joueur présent va vendre quand son sac atteint la capacité de **base** (ou quand le
+  contenu paie son prochain achat) ; les places en plus servent de tampon aux drones et aux absences. Un sac plus
+  grand ne peut pas nuire à un vrai joueur (il peut vendre aux mêmes moments) : sans cette règle, le modèle naïf
+  « vendre sac plein » le pénalisait à tort (−4 %).
 
 ### A. Coins gagnés par minute selon la graine (10 min, 9 cases, sans amélioration)
 

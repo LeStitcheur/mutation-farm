@@ -15,6 +15,7 @@ local HudController = require(Controllers.HudController)
 local RebirthController = require(Controllers.RebirthController)
 local PrestigeController = require(Controllers.PrestigeController)
 local UpgradeController = require(Controllers.UpgradeController)
+local MutadexController = require(Controllers.MutadexController)
 local PlantRenderer = require(Controllers.PlantRenderer)
 local HarvestController = require(Controllers.HarvestController)
 local DroneRenderer = require(Controllers.DroneRenderer)
@@ -30,6 +31,7 @@ local ordered: { Controller } = {
 	RebirthController, -- après HudController : se greffe sur MutationFarmHUD.Menu
 	PrestigeController,
 	UpgradeController,
+	MutadexController,
 	PlantRenderer,
 	HarvestController,
 	DroneRenderer,

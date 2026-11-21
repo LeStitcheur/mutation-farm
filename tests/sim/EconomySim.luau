@@ -15,6 +15,7 @@ local PlantConfig = require(Shared.Config.PlantConfig)
 local DroneConfig = require(Shared.Config.DroneConfig)
 local UpgradeConfig = require(Shared.Config.UpgradeConfig)
 local MutationConfig = require(Shared.Config.MutationConfig)
+local GameConfig = require(Shared.Config.GameConfig)
 local BigNum = require(Shared.Util.BigNum)
 local DataSchema = require(Shared.Util.DataSchema)
 local DroneLogic = require(Shared.Util.DroneLogic)
@@ -76,6 +77,18 @@ EconomySim.Profiles = {
 	},
 }
 
+-- Variabilité du joueur (réaction et cadence ±) : générateur congruentiel SÉPARÉ, à graine fixe. Il ne consomme pas
+-- la suite des mutations (math.random) : deux parties de même graine gardent les mêmes mutations dans l'ordre des
+-- plantations. Sans elle, un joueur « métronome » crée des effets de phase artificiels (bonus Parfait gagnés ou
+-- perdus selon l'instant des allers-retours au marché).
+local function newJitter(seed: number): () -> number
+	local state = (seed * 2654435761 + 12345) % 4294967296
+	return function(): number
+		state = (1664525 * state + 1013904223) % 4294967296
+		return state / 4294967296
+	end
+end
+
 local weightsCache = {}
 local function weightsFor(luck: number)
 	local cached = weightsCache[luck]
@@ -86,10 +99,23 @@ local function weightsFor(luck: number)
 	return cached
 end
 
+-- Tirages de mutation : un flux par plante (graine fixe). La n-ième Citrouille plantée reçoit le même nombre dans
+-- deux parties comparées (avec / sans amélioration) : une mutation rare ne change pas de plante d'une partie à
+-- l'autre, ce qui réduit fortement la variance des comparaisons (nombres aléatoires communs).
+local function mutationDraw(sim, plantId: string): number
+	local stream = sim.mutationStreams[plantId]
+	if not stream then
+		local plant = PlantConfig.get(plantId)
+		stream = newJitter(sim.seed * 7919 + (if plant then plant.order else 0) * 104729)
+		sim.mutationStreams[plantId] = stream
+	end
+	return stream()
+end
+
 local function plant(sim, tileId: string)
 	local data = sim.data
 	local plantId = data.seeds.selected
-	local mutation = MutationRoll.pick(weightsFor(Upgrades.luck(data)), math.random())
+	local mutation = MutationRoll.pick(weightsFor(Upgrades.luck(data)), mutationDraw(sim, plantId))
 	data.farm.tiles[tileId] = {
 		plantId = plantId,
 		plantedAt = sim.now,
@@ -133,6 +159,10 @@ function EconomySim.new(profile, seed: number, data, frozen: boolean?)
 		frozen = frozen == true,
 		now = 0,
 		nextManual = 0,
+		seed = seed,
+		jitter = newJitter(seed),
+		mutationStreams = {},
+		reaction = profile.reaction or 0,
 		sellingUntil = nil,
 		nextPeriodicSell = profile.sellEvery or math.huge,
 		drones = {},
@@ -320,12 +350,14 @@ function EconomySim.step(sim)
 	end
 
 	-- Récolte manuelle (ou, sans joueur ni vente périodique, vente quand le sac est plein).
+	-- Un joueur présent va vendre par habitude dès que son sac atteint la capacité de BASE (ou quand son contenu
+	-- paie son prochain achat) : les places en plus servent de tampon (drones, absences). Sans cette règle, le
+	-- rythme des ventes dépendrait de la capacité et créerait des effets de phase artificiels sur les bonus Parfait.
 	if manualActive(sim) then
 		if not sim.sellingUntil and now >= sim.nextManual then
-			if
-				Inventory.isFull(data.bag.items, Economy.bagCapacity(data))
-				or (now % 1 < DT and shouldSellEarly(sim))
-			then
+			local count = Inventory.count(data.bag.items)
+			local habit = math.min(Economy.bagCapacity(data), GameConfig.Bag.BaseCapacity)
+			if count >= habit or (now % 1 < DT and shouldSellEarly(sim)) then
 				sim.sellingUntil = now + profile.sellTrip
 			else
 				local target, oldest = nil, math.huge
@@ -333,13 +365,15 @@ function EconomySim.step(sim)
 					local tile = data.farm.tiles[tileId]
 					if tile then
 						local ripeAt = Growth.ripeAt(tile)
-						if now - ripeAt >= profile.reaction and ripeAt < oldest then
+						if now - ripeAt >= sim.reaction and ripeAt < oldest then
 							target, oldest = tileId, ripeAt
 						end
 					end
 				end
 				if target and harvest(sim, target, "player") then
-					sim.nextManual = now + profile.moveTime
+					-- Réaction ×[0,6 ; 1,4] et cadence ×[0,8 ; 1,2] autour des valeurs du profil.
+					sim.reaction = profile.reaction * (0.6 + 0.8 * sim.jitter())
+					sim.nextManual = now + profile.moveTime * (0.8 + 0.4 * sim.jitter())
 				end
 			end
 		end

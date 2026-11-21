@@ -53,7 +53,8 @@ export type PlayerData = {
 		cycleCoins: BigNum, -- Coins gagnés depuis le dernier rebirth (seuil de rebirth)
 		prestigeCoins: BigNum, -- Coins gagnés depuis le dernier prestige (seuil de prestige)
 	},
-	mutadex: { [ItemKey]: number }, -- découverte -> timestamp Unix
+	mutadex: { [ItemKey]: MutadexEntry }, -- Phase 4 : découvertes « plante|mutation » (jamais réinitialisé)
+	mutadexRewards: { [string]: number }, -- paliers du Mutadex accordés -> horodatage Unix (une seule fois)
 	cosmetics: {
 		owned: { [string]: boolean },
 		equipped: { [string]: string },
@@ -76,6 +77,12 @@ export type PlayerData = {
 		lastSeen: number,
 		quarantine: { QuarantineEntry }, -- données retirées par l'assainissement, conservées pour récupération
 	},
+}
+
+-- Entrée du Mutadex : première découverte (horodatage serveur Unix) et nombre de récoltes de la combinaison.
+export type MutadexEntry = {
+	firstAt: number,
+	count: number,
 }
 
 -- Donnée inconnue ou incompatible mise de côté au chargement (jamais supprimée silencieusement).
@@ -102,6 +109,8 @@ export type ClientState = {
 	cycleCoins: BigNum,
 	prestigeCoins: BigNum,
 	upgrades: { rebirth: { [string]: number }, permanent: { [string]: number } }, -- niveaux (panneau Améliorations)
+	mutadex: { [ItemKey]: MutadexEntry },
+	mutadexRewards: { [string]: number },
 	harvests: number,
 	perfectHarvests: number,
 }
@@ -115,6 +124,7 @@ export type HarvestResult = {
 	tier: PrecisionTier,
 	bonus: BigNum,
 	source: HarvestSource,
+	discovered: boolean, -- première récolte de cette combinaison (Mutadex)
 }
 
 export type NotifyKind = "info" | "success" | "error"

@@ -8,15 +8,17 @@ local GameConfig = require(script.Parent.Parent.Config.GameConfig)
 local PlantConfig = require(script.Parent.Parent.Config.PlantConfig)
 local MutationConfig = require(script.Parent.Parent.Config.MutationConfig)
 local UpgradeConfig = require(script.Parent.Parent.Config.UpgradeConfig)
+local MutadexConfig = require(script.Parent.Parent.Config.MutadexConfig)
 local BigNum = require(script.Parent.BigNum)
 local Deep = require(script.Parent.Deep)
 local Economy = require(script.Parent.Economy)
+local Mutadex = require(script.Parent.Mutadex)
 local FarmLayout = require(script.Parent.FarmLayout)
 
 type PlayerData = Types.PlayerData
 type Migration = (any) -> any
 
-local VERSION = 2
+local VERSION = 3
 local MAX_DEPTH = 16
 
 -- Copie défensive d'un BigNum stocké (zéro si absent ou corrompu).
@@ -44,6 +46,19 @@ local MIGRATIONS: { [number]: Migration } = {
 		progression.cycleCoins = if rebirths == 0 and prestiges == 0 then Deep.copy(earned) else BigNum.zero()
 		progression.prestigeCoins = if prestiges == 0 then Deep.copy(earned) else BigNum.zero()
 		data.stats.totalRebirths = rebirths
+		return data
+	end,
+	-- v3 (Phase 4, Mutadex) : une entrée devient { firstAt, count }. L'ancien format (un horodatage) n'a jamais été
+	-- écrit par le jeu ; s'il existe, il est converti (count = 1 : la récolte de découverte). Rien n'est supprimé ;
+	-- les paliers (mutadexRewards) sont ajoutés vides par la réconciliation.
+	[3] = function(data: any): any
+		if type(data.mutadex) == "table" then
+			for key, value in data.mutadex do
+				if type(value) == "number" then
+					data.mutadex[key] = { firstAt = value, count = 1 }
+				end
+			end
+		end
 		return data
 	end,
 }
@@ -88,6 +103,7 @@ function DataSchema.template(now: number): PlayerData
 			prestigeCoins = BigNum.zero(),
 		},
 		mutadex = {},
+		mutadexRewards = {},
 		cosmetics = {
 			owned = {},
 			equipped = {},
@@ -134,15 +150,36 @@ function DataSchema.migrate(
 end
 
 -- Complète récursivement les champs manquants ou mal typés à partir du gabarit (n'écrase jamais une valeur valide).
-function DataSchema.reconcile(target: { [any]: any }, template: { [any]: any })
+export type Replacement = { path: string, value: any }
+
+-- Complète `target` avec les champs manquants du gabarit. Une valeur présente mais d'un autre type que le gabarit
+-- est remplacée par la valeur par défaut ; si `replaced` est fourni, elle y est consignée (chemin, valeur d'origine)
+-- pour être mise en quarantaine par `load` : jamais de suppression silencieuse.
+function DataSchema.reconcile(
+	target: { [any]: any },
+	template: { [any]: any },
+	replaced: { Replacement }?,
+	prefix: string?
+)
 	for key, templateValue in template do
 		local value = target[key]
-		if value == nil or type(value) ~= type(templateValue) then
+		local path = if prefix then prefix .. "." .. tostring(key) else tostring(key)
+		if value == nil then
+			target[key] = Deep.copy(templateValue)
+		elseif type(value) ~= type(templateValue) then
+			if replaced then
+				table.insert(replaced, { path = path, value = value })
+			end
 			target[key] = Deep.copy(templateValue)
 		elseif type(templateValue) == "table" then
-			DataSchema.reconcile(value, templateValue)
+			DataSchema.reconcile(value, templateValue, replaced, path)
 		end
 	end
+end
+
+-- Horodatage Unix plausible : nombre fini ≥ 0.
+local function isTimestamp(value: any): boolean
+	return type(value) == "number" and value == value and value >= 0 and value < math.huge
 end
 
 local function isNonNegativeInteger(value: any): boolean
@@ -289,6 +326,45 @@ function DataSchema.sanitize(data: PlayerData, now: number?): { string }
 		end
 	end
 
+	-- Mutadex (Phase 4) : entrées { firstAt, count } ; paliers horodatés. Jamais réinitialisé.
+	-- Une entrée BIEN FORMÉE hors catalogue (plante ou mutation retirée de la configuration, palier supprimé) reste en
+	-- place, en sommeil : le Mutadex ne compte que le catalogue courant, et elle redevient active si le contenu
+	-- revient (un palier déjà accordé n'est donc jamais accordé deux fois). Seules les valeurs malformées partent en
+	-- quarantaine : la quarantaine est bornée (FIFO) et ne doit pas servir de stockage à des découvertes valides.
+	local raw = data :: any
+	if type(raw.mutadex) ~= "table" then
+		quarantine(data, notes, "mutadex", raw.mutadex, "Mutadex invalide", at)
+		raw.mutadex = {}
+	end
+	for key, value in raw.mutadex do
+		local valid = type(key) == "string"
+			and type(value) == "table"
+			and isTimestamp(value.firstAt)
+			and isNonNegativeInteger(value.count)
+		if not valid then
+			raw.mutadex[key] = nil
+			quarantine(data, notes, "mutadex." .. tostring(key), value, "entrée du Mutadex invalide", at)
+		elseif Mutadex.get(key) == nil then
+			table.insert(notes, "Mutadex : entrée hors catalogue conservée en sommeil (" .. key .. ")")
+		end
+	end
+	if type(raw.mutadexRewards) ~= "table" then
+		quarantine(data, notes, "mutadexRewards", raw.mutadexRewards, "paliers du Mutadex invalides", at)
+		raw.mutadexRewards = {}
+	end
+	local knownMilestones: { [string]: boolean } = {}
+	for _, milestone in MutadexConfig.Milestones do
+		knownMilestones[milestone.id] = true
+	end
+	for key, value in raw.mutadexRewards do
+		if type(key) ~= "string" or not isTimestamp(value) then
+			raw.mutadexRewards[key] = nil
+			quarantine(data, notes, "mutadexRewards." .. tostring(key), value, "palier du Mutadex invalide", at)
+		elseif not knownMilestones[key] then
+			table.insert(notes, "Mutadex : palier hors configuration conservé en sommeil (" .. key .. ")")
+		end
+	end
+
 	-- Compteurs.
 	local counters: { { container: any, field: string, path: string } } = {
 		{ container = data.progression, field = "rebirths", path = "progression.rebirths" },
@@ -349,9 +425,14 @@ function DataSchema.load(raw: any, now: number): (PlayerData?, LoadError?, { str
 		data = DataSchema.migrate(raw, version)
 		table.insert(notes, string.format("migration v%d -> v%d", version, VERSION))
 	end
-	DataSchema.reconcile(data, DataSchema.template(now) :: any)
+	local replaced: { Replacement } = {}
+	DataSchema.reconcile(data, DataSchema.template(now) :: any, replaced)
 	data.version = VERSION
 	local typed = data :: PlayerData
+	-- Valeurs d'un type incompatible remplacées par la réconciliation : conservées en quarantaine.
+	for _, item in replaced do
+		quarantine(typed, notes, item.path, item.value, "type incompatible -> valeur par défaut", now)
+	end
 	for _, note in DataSchema.sanitize(typed, now) do
 		table.insert(notes, note)
 	end

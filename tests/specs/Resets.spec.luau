@@ -29,7 +29,7 @@ return function()
 		data.progression.revision = 7
 		data.progression.cycleCoins = BigNum.fromNumber(320000) -- seuil exact du rebirth n° 2
 		data.progression.prestigeCoins = BigNum.fromNumber(900000)
-		data.mutadex["carrot|shiny"] = 123
+		data.mutadex["carrot|shiny"] = { firstAt = 123, count = 4 }
 		data.cosmetics.owned.hat = true
 		data.pets.owned.cat = 1
 		data.receipts = { "r1" }

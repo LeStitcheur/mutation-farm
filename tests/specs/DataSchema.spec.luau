@@ -111,14 +111,14 @@ return function()
 			v1.legacyField = { keep = true } -- donnée inconnue : conservée
 			local data, err, notes = DataSchema.load(Deep.copy(v1), 100)
 			expect(err).to.equal(nil)
-			expect(data.version).to.equal(2)
+			expect(data.version).to.equal(DataSchema.VERSION)
 			expect(data.progression.revision).to.equal(0)
 			expect(BigNum.eq(data.progression.cycleCoins, BigNum.fromNumber(42000))).to.equal(true)
 			expect(BigNum.eq(data.progression.prestigeCoins, BigNum.fromNumber(42000))).to.equal(true)
 			expect(data.stats.totalRebirths).to.equal(0)
 			expect((data :: any).legacyField.keep).to.equal(true)
 			expect(#data.meta.quarantine).to.equal(0)
-			expect(string.find(table.concat(notes, " "), "migration v1 -> v2", 1, true)).to.be.ok()
+			expect(string.find(table.concat(notes, " "), "migration v1 -> v" .. DataSchema.VERSION, 1, true)).to.be.ok()
 		end)
 
 		it("v1 -> v2 défensive : tables manquantes ou compteurs corrompus", function()
@@ -129,6 +129,28 @@ return function()
 	end)
 
 	describe("quarantaine (aucune suppression silencieuse)", function()
+		it(
+			"une valeur d'un type incompatible remplacée par la réconciliation est conservée en quarantaine",
+			function()
+				local raw = DataSchema.template(0)
+				raw.stats.harvests = "douze" :: any
+				raw.cosmetics = 7 :: any
+				raw.meta.quarantine = "invalide" :: any
+				local data, err, notes = DataSchema.load(raw, 50)
+				expect(err).to.equal(nil)
+				expect(data.stats.harvests).to.equal(0)
+				expect(type(data.cosmetics.owned)).to.equal("table")
+				local byPath = {}
+				for _, item in data.meta.quarantine do
+					byPath[item.path] = item.value
+				end
+				expect(byPath["stats.harvests"]).to.equal("douze")
+				expect(byPath["cosmetics"]).to.equal(7)
+				expect(byPath["meta.quarantine"]).to.equal("invalide")
+				expect(string.find(table.concat(notes, " "), "type incompatible", 1, true)).to.be.ok()
+			end
+		)
+
 		it("toute valeur retirée ou corrigée est conservée dans meta.quarantine avec une note", function()
 			local data = DataSchema.template(0)
 			data.farm.tiles["main:2"] = { plantId = "plante_supprimee", plantedAt = 10, growTime = 6 }

@@ -22,6 +22,7 @@ local Net = require(Shared.Net)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
 local FarmService = require(script.Parent.FarmService)
+local MutadexService = require(script.Parent.MutadexService)
 local Notifier = require(script.Parent.Parent.Infra.Notifier)
 local RateLimiter = require(script.Parent.Parent.Infra.RateLimiter)
 
@@ -122,8 +123,10 @@ local function harvest(
 		tier = result.tier,
 		bonus = result.bonus,
 		source = source,
+		discovered = result.discovered,
 	}
 	Net.event(Net.Events.HarvestResult):FireClient(player, payload)
+	MutadexService.OnHarvest(player, result.plantId, result.mutation, result.discovered, result.milestones)
 	local mutationDef = MutationConfig.get(result.mutation)
 	local plant = PlantConfig.get(result.plantId)
 	if mutationDef and plant and mutationDef.multiplier >= GameConfig.Mutations.NotifyMinMultiplier then

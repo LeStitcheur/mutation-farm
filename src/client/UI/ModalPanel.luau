@@ -34,6 +34,7 @@ export type Options = {
 
 export type Modal = {
 	frame: Frame,
+	menuButton: TextButton, -- bouton du menu latéral (animations de notification)
 	isOpen: () -> boolean,
 	setOpen: (boolean) -> (),
 }
@@ -95,9 +96,9 @@ function ModalPanel.new(options: Options): Modal
 	local menuButton = Builder.button({
 		Name = options.menuText,
 		LayoutOrder = options.menuOrder,
-		Size = UDim2.fromOffset(170, 58),
+		Size = UDim2.fromOffset(160, 50), -- taille fixée par la grille du menu (HudController)
 		Text = options.menuText,
-		TextSize = 24,
+		TextSize = 20,
 		BackgroundColor3 = options.menuColor,
 		Parent = options.menu,
 	})
@@ -223,6 +224,7 @@ function ModalPanel.new(options: Options): Modal
 
 	return {
 		frame = frame,
+		menuButton = menuButton,
 		isOpen = function(): boolean
 			return open
 		end,

@@ -104,6 +104,22 @@ Simulations Lune également (pas de validation du vrai DataStore).
 - Rapport chiffré (non exécuté par `check.ps1`, ≈ 30 s) : `tools/bin/lune.exe run tests/run.luau report`
   (`docs/ECONOMY.md` §8).
 
+### Ce qui est couvert hors Studio pour le Mutadex (Phase 4, jalon A)
+- `Mutadex.spec` (18 tests) : catalogue (49 entrées, identifiants = clés du sac, raretés, multiplicateurs) ;
+  exigences des paliers (5 / 13 / 25 / 37 / 49) ; **première découverte** et **découverte déjà enregistrée**
+  (date conservée, compteur) ; combinaison hors catalogue ignorée ; **récolte manuelle et de drone** par
+  `HarvestRules.apply` ; **concurrence** joueur + drone sur une culture = 1 comptage ; **paliers** accordés une
+  seule fois (20 réévaluations), places de sac (confort uniquement), collection complète ; évaluation dans le
+  mutateur de récolte ; historique, plus rares, filtres et recherche sans accents (noms inconnus jamais révélés) ;
+  **rebirth et prestige** sans effet sur le Mutadex ; **sauvegarde/rechargement** ; **migration v2 -> v3** ;
+  **données malformées** en quarantaine (entrées, paliers, Mutadex non tabulaire) ; **contenu retiré** de la
+  configuration : entrées et paliers bien formés conservés en sommeil (ni comptés ni mis en quarantaine) et
+  intacts après un nouveau cycle sauvegarde -> chargement.
+- `DataSchema.spec` (+1) : une valeur d'un **type incompatible** n'est plus remplacée en silence par la
+  réconciliation : elle part en quarantaine (correctif d'un défaut antérieur).
+- `EconomySim.spec` : détection du rebirth suivant le prestige corrigée (rebirth effectué, pas éligibilité
+  transitoire) ; modèle du joueur affiné (`docs/ECONOMY.md` §8).
+
 ### Ce qui n'est PAS couvert automatiquement
 Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
 → checklist ci-dessous, déroulée via Studio MCP (§3) ; ce qui exige un humain reste marqué comme tel.
@@ -238,6 +254,8 @@ fenêtres de test sont visibles par le MCP). Ne cocher qu'après exécution rée
 | **Améliorations : mobile** (Phase 3) | *Test › Device* (téléphone) | Menu à 4 boutons sans chevauchement avec le chat ouvert ; panneau ajusté à l'écran, onglets et boutons d'achat utilisables au toucher, textes lisibles |
 | **Améliorations : manette** (Phase 3) | Manette branchée | L2 ouvre le panneau, onglet sélectionné ; croix pour passer d'un onglet aux lignes, A achète (niveau + 1, solde mis à jour), B ferme |
 | **Améliorations : persistance réelle** (Phase 3) | Comme « Sauvegarde réelle » | Niveaux achetés restaurés après Stop / Play ; améliorations Essence perdues et permanentes conservées après un prestige réel |
+| **Mutadex : persistance réelle** (Phase 4) | Comme « Sauvegarde réelle » | Découvertes, compteurs, dates et paliers restaurés après Stop / Play et après un changement de serveur ; ancienne sauvegarde v2 migrée sans perte |
+| **Mutadex : mobile et manette** (Phase 4) | *Test › Device* ; manette branchée | Menu en grille lisible sans chevauchement avec le chat ; panneau ajusté, cartes défilables au doigt ; R2 ouvre, croix pour parcourir filtres et cartes (défilement automatique), B ferme |
 
 ### 2.5 Phase 3, jalon A (rebirth) — validation Studio MCP du 2026-11-21 (Play solo, API désactivée)
 

@@ -35,7 +35,8 @@ donnée brute ──> version future ? ── oui ──> refus (aucune écritur
 |---|---|---|
 | 0 | — | Donnée sans champ `version` : traitée comme v0, migrée jusqu'à la version courante |
 | 1 | Phases 0–2 | Schéma initial : monnaies, ferme, graines, sac, améliorations, machines (drones), progression (`rebirths`, `prestiges`), Mutadex, cosmétiques, familiers, statistiques, reçus, méta |
-| **2** | Phase 3, jalon A | Progression : `revision`, `cycleCoins`, `prestigeCoins` ; `stats.totalRebirths` ; `meta.quarantine` |
+| 2 | Phase 3, jalon A | Progression : `revision`, `cycleCoins`, `prestigeCoins` ; `stats.totalRebirths` ; `meta.quarantine` |
+| **3** | Phase 4, jalon A | Mutadex : `mutadex[clé] = { firstAt, count }` (au lieu d'un horodatage) ; `mutadexRewards` (paliers accordés) |
 
 ### Migration v1 → v2 (`MIGRATIONS[2]`)
 - `progression.revision = 0`.
@@ -49,6 +50,20 @@ donnée brute ──> version future ? ── oui ──> refus (aucune écritur
 
 Conséquence : un joueur v1 ayant déjà gagné ≥ 100 000 Coins peut faire son premier rebirth dès son retour.
 
+### Migration v2 → v3 (`MIGRATIONS[3]`, Mutadex)
+- Une entrée `mutadex[clé]` au format v2 (un horodatage, jamais écrit par le jeu avant la Phase 4) devient
+  `{ firstAt = horodatage, count = 1 }` (la récolte de découverte). Rien n'est supprimé.
+- `mutadexRewards` est ajouté vide par la réconciliation ; les paliers déjà atteints sont accordés au chargement
+  suivant par `MutadexService` (une seule fois).
+- Entrées ou paliers malformés → quarantaine ; entrées et paliers bien formés mais absents de la configuration →
+  conservés en sommeil (`docs/MUTADEX.md` §4).
+
+### Réconciliation : types incompatibles (correctif Phase 4)
+Avant la Phase 4, `DataSchema.reconcile` remplaçait **silencieusement** une valeur d'un autre type que le gabarit
+(ex. `stats.harvests = "douze"` → 0, `cosmetics = 7` → table vide). Désormais chaque remplacement est consigné
+(chemin + valeur d'origine) et mis en **quarantaine** par `DataSchema.load` (raison « type incompatible -> valeur
+par défaut »), y compris une liste de quarantaine elle-même invalide. Testé (`DataSchema.spec`).
+
 ## 4. Quarantaine (`meta.quarantine`)
 
 Entrée : `{ path, value, reason, at }` (`Types.QuarantineEntry`).
@@ -61,6 +76,8 @@ Entrée : `{ path, value, reason, at }` (`Types.QuarantineEntry`).
   (Phase 3, jalon C : identifiant inconnu ou rangé dans le mauvais arbre, niveau non entier, négatif ou nul →
   retiré ; au-delà du maximum → plafonné, valeur d'origine en quarantaine). Le schéma reste en v2 : les champs
   `upgrades.rebirth` / `upgrades.permanent` existaient déjà, seul leur contenu est désormais validé.
+  Depuis la Phase 4 (v3) : **Mutadex** (entrées et paliers malformés, collection non tabulaire) et toute valeur d'un
+  **type incompatible** remplacée par la réconciliation.
 - La troncature FIFO des reçus (au-delà de 200) est signalée par une note (les reçus retirés sont les plus anciens).
 - Récupération : lire `meta.quarantine` (Studio : `ServerStorage.MutationFarmDev:Invoke("snapshot", userId)`) puis
   restaurer par une migration dédiée si une donnée doit être rendue au joueur.

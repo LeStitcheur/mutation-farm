@@ -4,6 +4,8 @@
 -- Studio MCP, qui s'exécutent dans une autre VM et ne peuvent pas lire l'état des services :
 --   Invoke("grantEarned", userId, amount) : crédite des Coins GAGNÉS (comptent pour le cycle) via EconomyService.AddCoins
 --   Invoke("snapshot", userId)            : copie JSON de la donnée serveur du joueur (inspection)
+--   Invoke("setTileMutation", userId, tileId, mutationId) : fixe la mutation d'une culture existante (tests du
+--                                           Mutadex par le vrai chemin de récolte)
 -- API : aucune.
 
 local HttpService = game:GetService("HttpService")
@@ -12,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local ServerStorage = game:GetService("ServerStorage")
 
+local MutationConfig = require(ReplicatedStorage.Shared.Config.MutationConfig)
 local BigNum = require(ReplicatedStorage.Shared.Util.BigNum)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
@@ -20,7 +23,7 @@ local MAX_GRANT = 1e15
 
 local DevService = {}
 
-local function invoke(command: unknown, userId: unknown, amount: unknown): any
+local function invoke(command: unknown, userId: unknown, amount: unknown, extra: unknown): any
 	if type(command) ~= "string" or type(userId) ~= "number" then
 		return nil
 	end
@@ -36,6 +39,20 @@ local function invoke(command: unknown, userId: unknown, amount: unknown): any
 	elseif command == "snapshot" then
 		local data = DataService.GetData(player)
 		return if data then HttpService:JSONEncode(data) else nil
+	elseif command == "setTileMutation" then
+		if type(amount) ~= "string" or type(extra) ~= "string" or not MutationConfig.get(extra) then
+			return false
+		end
+		local tileId, mutationId = amount, extra
+		local applied = false
+		DataService.Update(player, function(data)
+			local tile = data.farm.tiles[tileId]
+			if tile then
+				tile.mutation = if mutationId == MutationConfig.NORMAL then nil else mutationId
+				applied = true
+			end
+		end)
+		return applied
 	end
 	return nil
 end

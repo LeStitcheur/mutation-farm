@@ -102,15 +102,33 @@ avance la Phase 5). Détail : `docs/PROGRESSION.md`.
       Rebirth / Prestige refactorés revalidés
 - [ ] Manuel : améliorations au toucher et à la manette, persistance réelle (`docs/TESTING.md` §2.4)
 
-## Phase 4 — Croissance de la ferme et automatisation
+## Phase 4 — Collection, familiers, événements et missions (branche `phase-4/content-retention`)
+
+Cahier des charges du 2026-11-21 (« contenu et fidélisation »). Branche empilée sur `phase-3/progression` (PR #1
+non fusionnée).
+
+**Jalon A — Mutadex (implémenté, validation Studio en attente)**
+- [x] Catalogue dérivé (7 plantes × 7 mutations = 49), raretés, multiplicateurs (`MutadexConfig`, `Mutadex`)
+- [x] Découvertes par le serveur dans le mutateur de récolte (joueur et drones), compteurs, première date
+- [x] Paliers 10 / 25 / 50 / 75 / 100 % accordés une seule fois (cosmétiques, places de sac), rattrapés au chargement
+- [x] Schéma v3 + migration v2 -> v3 ; quarantaine des données malformées ; **correctif** : la réconciliation ne
+      remplace plus en silence une valeur d'un type incompatible
+- [x] Panneau Mutadex (progression, plus rares, paliers, filtres, recherche, cartes, historique ; M / R2) ; menu du
+      HUD en grille de 2 colonnes
+- [x] Tests Lune : 246 (dont `Mutadex.spec` 18) ; simulateur affiné (variabilité, nombres aléatoires communs)
+- [x] Revue de code : contenu retiré conservé en sommeil (au lieu de la quarantaine bornée), panneau redessiné
+      seulement si son contenu change, lignes d'information sur une ligne, annonces de rattrapage différées
+- [ ] Validation Studio MCP (`docs/TESTING.md` §2.8) — en attente de la connexion du plugin Rojo
+- [ ] Manuel : persistance réelle, mobile, manette (`docs/TESTING.md` §2.4)
+
+**Jalon B — Familiers** · **Jalon C — Événements dynamiques** · **Jalon D — Missions** : à venir.
+
+## Phase 5 — Croissance de la ferme et automatisation (ex-Phase 4, replanifiée)
 - [ ] Améliorations normales (vitesse, valeur, sac) — UpgradeService + UI
-- [ ] Extensions latérales `west`/`east`, terrasses (escaliers, déblocage)
-- [ ] Événement Floraison dorée
+- [ ] Extensions latérales `west`/`east`, terrasses (escaliers, déblocage) ; reconstruction de la parcelle au prestige
 - [ ] AutomationService : drones collecteurs (simulation agrégée), vente auto (drones récolteurs : Phase 2 jalon B)
 - [ ] Production hors ligne plafonnée à 2 h, écran « Pendant ton absence »
-
-## Phase 5 — Rebirth & Prestige
-- Avancée en Phase 3 (voir ci-dessus).
+- Rebirth & Prestige : avancés en Phase 3. Floraison dorée : Phase 4, jalon C.
 
 ## Phase 6 — Monétisation
 - [ ] PurchaseService : Game Passes (confort/cosmétique), Developer Products limités
