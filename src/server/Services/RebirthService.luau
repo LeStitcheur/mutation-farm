@@ -5,14 +5,18 @@
 -- API : Rebirth.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage.Shared
 local ProgressionConfig = require(Shared.Config.ProgressionConfig)
+local Types = require(Shared.Types)
 local Format = require(Shared.Util.Format)
+local Quests = require(Shared.Util.Quests)
 local Resets = require(Shared.Util.Resets)
 local Net = require(Shared.Net)
 local ProgressionService = require(script.Parent.ProgressionService)
 local Notifier = require(script.Parent.Parent.Infra.Notifier)
+local QuestNotifier = require(script.Parent.Parent.Infra.QuestNotifier)
 local RateLimiter = require(script.Parent.Parent.Infra.RateLimiter)
 
 local limiter = RateLimiter.new(ProgressionConfig.Rebirth.RequestsPerSecond, 1)
@@ -20,9 +24,16 @@ local limiter = RateLimiter.new(ProgressionConfig.Rebirth.RequestsPerSecond, 1)
 local RebirthService = {}
 
 function RebirthService.Rebirth(player: Player, expectedRevision: number): (boolean, string?)
+	local completed: { Types.Mission } = {}
 	local outcome, failure = ProgressionService.Run(player, "rebirth", function(data)
-		return Resets.rebirth(data, expectedRevision)
+		local result, reason = Resets.rebirth(data, expectedRevision)
+		if result then
+			-- Missions « rebirth » : même mutateur que la transition (jamais comptée deux fois).
+			completed = Quests.record(data, "rebirth", 1, Workspace:GetServerTimeNow())
+		end
+		return result, reason
 	end, function(result: Resets.RebirthOutcome)
+		QuestNotifier.completed(player, completed)
 		Notifier.send(
 			player,
 			"success",

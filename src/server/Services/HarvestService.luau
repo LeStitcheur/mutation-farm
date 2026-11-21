@@ -4,7 +4,8 @@
 -- pour le joueur seulement ; replantation automatique (nouveau tirage de mutation).
 -- Anti-duplication : la validation est REFAITE puis appliquée dans le même mutateur synchrone (HarvestRules),
 -- donc un joueur et un drone ne peuvent jamais récolter deux fois la même culture.
--- API : Harvest (joueur), HarvestForDrone (DroneService).
+-- API : Harvest (joueur), HarvestForDrone (DroneService) ; signal Harvested(player, outcome, source) émis après
+-- chaque récolte validée (familiers : passages de niveau ; missions : progression).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -18,10 +19,13 @@ local BigNum = require(Shared.Util.BigNum)
 local DroneLogic = require(Shared.Util.DroneLogic)
 local FarmLayout = require(Shared.Util.FarmLayout)
 local HarvestRules = require(Shared.Util.HarvestRules)
+local Signal = require(Shared.Util.Signal)
 local Net = require(Shared.Net)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
+local EventService = require(script.Parent.EventService)
 local FarmService = require(script.Parent.FarmService)
+local MutadexService = require(script.Parent.MutadexService)
 local Notifier = require(script.Parent.Parent.Infra.Notifier)
 local RateLimiter = require(script.Parent.Parent.Infra.RateLimiter)
 
@@ -38,7 +42,9 @@ local MAX_TILE_ID_LENGTH = 32
 
 local limiter = RateLimiter.new(GameConfig.Harvest.RequestsPerSecond)
 
-local HarvestService = {}
+local HarvestService = {
+	Harvested = Signal.new() :: Signal.Signal<Player, HarvestRules.Outcome, Types.HarvestSource>,
+}
 
 local function isCharacterNear(player: Player, part: BasePart): boolean
 	local character = player.Character
@@ -99,19 +105,21 @@ local function harvest(
 		return false, "bag_full"
 	end
 
-	-- Revalidation + application atomiques (aucun yield entre les deux).
+	-- Revalidation + application atomiques (aucun yield entre les deux). Floraison dorée lue à cet instant précis.
+	local eventValueBonus = EventService.ValueBonus()
 	local outcome: HarvestRules.Outcome? = nil
 	DataService.Update(player, function(d)
 		if HarvestRules.check(d, tileId, now) then
-			outcome = HarvestRules.apply(d, tileId, now, source)
+			outcome = HarvestRules.apply(d, tileId, now, source, eventValueBonus)
 		end
 	end)
 	local result = outcome
 	if not result then
 		return false, "not_ripe"
 	end
-	if not BigNum.isZero(result.bonus) then
-		EconomyService.AddCoins(player, result.bonus)
+	local credit = BigNum.add(result.bonus, result.eventBonus)
+	if not BigNum.isZero(credit) then
+		EconomyService.AddCoins(player, credit)
 	end
 	FarmService.PlantTile(player, tileId)
 
@@ -122,8 +130,12 @@ local function harvest(
 		tier = result.tier,
 		bonus = result.bonus,
 		source = source,
+		discovered = result.discovered,
+		eventBonus = result.eventBonus,
 	}
 	Net.event(Net.Events.HarvestResult):FireClient(player, payload)
+	MutadexService.OnHarvest(player, result.plantId, result.mutation, result.discovered, result.milestones)
+	HarvestService.Harvested:Fire(player, result, source)
 	local mutationDef = MutationConfig.get(result.mutation)
 	local plant = PlantConfig.get(result.plantId)
 	if mutationDef and plant and mutationDef.multiplier >= GameConfig.Mutations.NotifyMinMultiplier then

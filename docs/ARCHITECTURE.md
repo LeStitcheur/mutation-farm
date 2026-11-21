@@ -21,22 +21,31 @@ src/
   shared/   -> ReplicatedStorage.Shared
     Types.luau            Contrats de données (PlayerData, TileState, ClientState…)
     Net.luau              Noms et accès aux RemoteEvents
-    Config/               GameConfig, PlantConfig, MutationConfig, DroneConfig, ProgressionConfig, UpgradeConfig
+    Config/               GameConfig, PlantConfig, MutationConfig, DroneConfig, ProgressionConfig, UpgradeConfig,
+                          MutadexConfig, PetConfig, EventConfig, QuestConfig
                           (gelées)
     Util/                 Logique pure : BigNum, Format, Growth, Economy, Inventory, MutationRoll,
                           DataSchema, Resets, FarmLayout, ClientView, Signal, Deep, SessionLock, SlotAllocator,
-                          HarvestRules, DroneLogic, ProgressionMath, Upgrades
+                          HarvestRules, DroneLogic, ProgressionMath, Upgrades, Mutadex, Pets, WorldEvents, Quests,
+                          Hash,
+                          Bonuses (agrégation améliorations × familiers sous les plafonds globaux)
   server/   -> ServerScriptService.Server
     init.server.luau      Bootstrap des services
     Config/MutationOdds   Poids de mutation (jamais répliqués)
-    Infra/                DataStoreAdapter, RateLimiter, Notifier
+    Infra/                DataStoreAdapter, RateLimiter, Notifier, QuestNotifier
     Services/             DataService, EconomyService, PlantService, MutationService, FarmService, HarvestService,
                           DroneService, ProgressionService, RebirthService, PrestigeService,
-                          UpgradeService, DevService (Studio uniquement), SyncService
+                          UpgradeService, MutadexService, PetService, EventService, QuestService,
+                          DevService (Studio uniquement),
+                          SyncService
   client/   -> StarterPlayer.StarterPlayerScripts.Client
     init.client.luau      Bootstrap des contrôleurs
     Controllers/          StateController, HudController, RebirthController, PrestigeController, UpgradeController,
-                          PlantRenderer, HarvestController, DroneRenderer
+                          MutadexController, PetController, EventController, QuestController, PlantRenderer,
+                          HarvestController,
+                          DroneRenderer,
+                          PetRenderer (familiers de tous les joueurs, rendu local)
+                          (menu latéral : grille de 2 colonnes, boutons ajoutés par les contrôleurs)
     UI/                   Theme, Builder, PanelHub (un panneau à la fois, chat masqué),
                           ModalPanel (base des panneaux du menu : bouton, touches, échelle, X / B, PanelHub),
                           ConfirmPanel (information + confirmation, sur ModalPanel : Rebirth et Prestige)
@@ -69,7 +78,8 @@ dépend de ces trois derniers.)
 | **EconomyService** | Coins, vente du sac (× multiplicateur de revenu rebirth × prestige, calculé dans le mutateur) ; tout gain alimente l'historique et les cycles (`ProgressionMath.recordEarnings`) | `AddCoins`, `TrySpendCoins`, `SellAll` |
 | **PlantService** | Graines (déblocage, sélection), durée de pousse effective | `GetSelectedSeed`, `ComputeGrowTime`, `UnlockSeed`, `SelectSeed` |
 | **FarmService** | Parcelles (attribution, construction), état des cases, replantation | `PlantTile`, `ReplantEmpty`, `GetTilePart`, `OwnsTile`, `GetPlotModel`, `GetPlotOrigin`, signal `PlotReady` |
-| **HarvestService** | Récoltes joueur et drone (règles communes `HarvestRules`), bonus de précision (joueur seulement), notification des mutations ≥ ×8 | `Harvest`, `HarvestForDrone` |
+| **HarvestService** | Récoltes joueur et drone (règles communes `HarvestRules`, qui enregistrent aussi le Mutadex et l'XP des familiers dans le même mutateur), bonus de précision (joueur seulement), notification des mutations ≥ ×8 ; signal `Harvested(player, outcome, source)` après chaque récolte validée | `Harvest`, `HarvestForDrone`, `Harvested` |
+| **MutadexService** | Annonces du Mutadex (Phase 4, jalon A) : premières découvertes et paliers accordés ; accorde au chargement les paliers déjà atteints | `OnHarvest` |
 | **SyncService** | Réplication de l'état joueur (coalescée, ≤ 10 Hz) | — |
 | **MutationService** | Tirage pondéré exclusif d'une mutation par plantation (`Random` serveur, poids `MutationOdds` × chance du joueur `Upgrades.luck`, poids mis en cache par niveau de chance) ; valide la configuration au démarrage | `Roll(luck?)` |
 | **DroneService** | Station d'achat (ProximityPrompt serveur, propriétaire seulement), flotte sauvegardée (`machines.drones`), **une** boucle serveur pour tous les drones (intervalle `DroneLogic.interval`, planifié depuis l'échéance précédente), ancres `FarmDrone` | `Buy`, `Refresh` |
@@ -77,6 +87,9 @@ dépend de ces trois derniers.)
 | **RebirthService** | Rebirth (Phase 3, jalon A) : remote, débit, règle `Resets.rebirth` exécutée par `ProgressionService.Run` | `Rebirth` |
 | **PrestigeService** | Prestige (Phase 3, jalon B) : remote, débit, règle `Resets.prestige` exécutée par `ProgressionService.Run` | `Prestige` |
 | **UpgradeService** | Achats d'améliorations (Phase 3, jalon C) : remote validé, débit, refus pendant une transition, `Upgrades.purchase` dans un mutateur, flotte recalculée pour les drones offerts | `Purchase` |
+| **PetService** | Familiers (Phase 4, jalon B) : éclosion (aléa serveur, `Pets.hatch` dans un mutateur, **sauvegarde avant confirmation**), équiper / retirer / relâcher, annonces de niveau (signal `HarvestService.Harvested`), attribut `Pets` du joueur pour le rendu | `Hatch`, `Equip`, `Unequip`, `Release`, `OnLevelUps`, `GrantFreeEggs`, `Refresh` |
+| **EventService** | Événements du monde (Phase 4, jalon C) : calendrier déterministe (`WorldEvents`, horloge serveur, identique sur tous les serveurs), état publié dans `ReplicatedStorage.WorldEvent` (attributs `EventId`, `StartsAt`, `EndsAt`, répliqués aux arrivées tardives), annonces de début et de fin ; bonus lus à l'instant de l'action (chance à la plantation, valeur à la récolte) | `Current`, `LuckFactor`, `ValueBonus`, `Force`, `ClearForced` (Studio) |
+| **QuestService** | Missions (Phase 4, jalon D) : tirage déterministe par joueur et période (au chargement, puis contrôle toutes les 15 s), **sauvegardé** (aucun nouveau tirage en changeant de serveur) ; récupération `QuestClaim` validée et unique (`Quests.claim` dans un mutateur) ; annonces des missions terminées (récoltes via `HarvestService.Harvested` ; ventes, éclosions et rebirths via `Infra/QuestNotifier` dans leurs services) | `Refresh`, `Claim`, `Record` (Studio) |
 | **DevService** | Outils de test **Studio uniquement** (`RunService:IsStudio()`) : `ServerStorage.MutationFarmDev` (BindableFunction, inaccessible aux clients) — `grantEarned`, `snapshot` | — |
 | *AutomationService* | Phase 4 (drones collecteurs, vente auto, hors ligne) | |
 | *PurchaseService* | Phase 6 | |
@@ -95,10 +108,21 @@ traitement des joueurs). `DataService.Start` est appelé en **dernier** pour que
 | `PrestigeRequest` | C→S | `revision: number` (révision de progression affichée) | mêmes contrôles que `RebirthRequest` (verrou **partagé**) ; rebirths depuis le dernier prestige et Coins gagnés depuis le dernier prestige ≥ conditions |
 | `UpgradePurchase` | C→S | `upgradeId: string`, `expectedLevel: number` (niveau affiché) | chaîne ≤ 32 du catalogue, entier 0..1 000, 4 req/s, aucune transition en cours ; niveau attendu = niveau courant (sinon refus sans effet), niveau < maximum, solde de la monnaie de l'arbre ≥ coût |
 | `ClientReady` | C→S | — | 1 req/s ; si profil chargé : renvoi de `LoadStatus` + `StateSync` (rattrape les événements émis avant la connexion des écouteurs) |
+| `PetHatch` | C→S | `eggId: string`, `expectedHatched: number` (éclosions affichées), `useFree: boolean` | chaîne ≤ 32 du catalogue, entier 0..1e9, booléen, 1 éclosion / 3 s, aucune transition en cours, aucune éclosion en sauvegarde ; révision attendue = `pets.hatched` (sinon sans effet), inventaire < 50, œuf gratuit en réserve ou Coins ≥ prix (œuf vendu) |
+| `PetEquip` / `PetUnequip` / `PetRelease` | C→S | `instanceId: string` | chaîne 1..32, 5 req/s, aucune transition ; instance existante et active (équiper : < 3 équipés ; relâcher : non équipée) |
+| `QuestClaim` | C→S | `missionId: string` | chaîne 1..32, 4 req/s, aucune transition ; mission connue de la période courante, terminée, non récupérée (sinon sans effet) |
 | `StateSync` | S→C | `ClientState` | — |
-| `HarvestResult` | S→C | `{ tileId, plantId, mutation, tier, bonus, source }` (`source` : `"player"` / `"drone"`) | — |
+| `PetHatched` | S→C | `{ eggId, instanceId, petId, saved }` — **après** la tentative de sauvegarde | — |
+| `HarvestResult` | S→C | `{ tileId, plantId, mutation, tier, bonus, source, discovered, eventBonus }` (`source` : `"player"` / `"drone"` ; `discovered` : première récolte de la combinaison au Mutadex ; `eventBonus` : part de valeur de la Floraison dorée versée à la récolte) | — |
 | `Notify` | S→C | `{ kind, text }` | — |
 | `LoadStatus` | S→C | `{ status, message }` | — |
+
+L'événement du monde actif n'utilise aucun remote : `ReplicatedStorage.WorldEvent` porte trois attributs écrits par le serveur
+(`EventId`, `StartsAt`, `EndsAt`) ; le client n'en tire que l'affichage (`docs/EVENTS.md`).
+
+Règle 7 (probabilités de mutation côté serveur) : les **poids** et le facteur de la Pluie mutagène restent dans
+`Server/Config/MutationOdds` ; les bonus de chance des améliorations, des familiers et de la Rosée chanceuse sont des
+multiplicateurs publics (affichés au joueur), appliqués aux poids par le serveur et plafonnés par `Util/Bonuses`.
 
 La vente passe par un `ProximityPrompt` serveur (le moteur valide la distance) avec un délai anti-spam.
 L'achat de drones aussi (station de la parcelle, appui de 0,4 s, propriétaire seulement, 2 achats/s) : aucun remote
@@ -147,9 +171,10 @@ multi-serveurs ; `DataService` ne fait que les appliquer dans `UpdateAsync`)
 1. **Chargement** : `UpdateAsync` ; si `session` appartient à un autre serveur et `heartbeat` < 120 s → verrou actif,
    la transformation retourne `nil` (aucune écriture), nouvelle tentative toutes les 5 s jusqu'à 130 s puis kick.
    Sinon on écrit notre `session` (vol du verrou périmé) et on lit `data`.
-2. **Migration** : `DataSchema.load` → migrations `version → VERSION` (schéma **v2** depuis la Phase 3), réconciliation
-   avec le gabarit, assainissement : toute valeur retirée ou corrigée part en quarantaine (`meta.quarantine`), jamais
-   supprimée silencieusement — voir `docs/DATA_MIGRATIONS.md`. Une version **future** (serveur obsolète) refuse le
+2. **Migration** : `DataSchema.load` → migrations `version → VERSION` (schéma **v5** depuis la Phase 4), réconciliation
+   avec le gabarit (valeurs d'un type incompatible consignées), assainissement : toute valeur retirée, remplacée ou
+   corrigée part en quarantaine (`meta.quarantine`), jamais supprimée silencieusement — voir
+   `docs/DATA_MIGRATIONS.md`. Une version **future** (serveur obsolète) refuse le
    chargement **sans écrire**.
 3. **Autosave** toutes les 45 s (rafraîchit `heartbeat`). Avant chaque écriture : copie profonde + `DataSchema.validate`
    (JSON-safe) ; donnée invalide = pas d'écriture.

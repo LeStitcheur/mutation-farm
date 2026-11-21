@@ -104,6 +104,59 @@ Simulations Lune également (pas de validation du vrai DataStore).
 - Rapport chiffré (non exécuté par `check.ps1`, ≈ 30 s) : `tools/bin/lune.exe run tests/run.luau report`
   (`docs/ECONOMY.md` §8).
 
+### Ce qui est couvert hors Studio pour le Mutadex (Phase 4, jalon A)
+- `Mutadex.spec` (18 tests) : catalogue (49 entrées, identifiants = clés du sac, raretés, multiplicateurs) ;
+  exigences des paliers (5 / 13 / 25 / 37 / 49) ; **première découverte** et **découverte déjà enregistrée**
+  (date conservée, compteur) ; combinaison hors catalogue ignorée ; **récolte manuelle et de drone** par
+  `HarvestRules.apply` ; **concurrence** joueur + drone sur une culture = 1 comptage ; **paliers** accordés une
+  seule fois (20 réévaluations), places de sac (confort uniquement), collection complète ; évaluation dans le
+  mutateur de récolte ; historique, plus rares, filtres et recherche sans accents (noms inconnus jamais révélés) ;
+  **rebirth et prestige** sans effet sur le Mutadex ; **sauvegarde/rechargement** ; **migration v2 -> v3** ;
+  **données malformées** en quarantaine (entrées, paliers, Mutadex non tabulaire) ; **contenu retiré** de la
+  configuration : entrées et paliers bien formés conservés en sommeil (ni comptés ni mis en quarantaine) et
+  intacts après un nouveau cycle sauvegarde -> chargement.
+- `DataSchema.spec` (+1) : une valeur d'un **type incompatible** n'est plus remplacée en silence par la
+  réconciliation : elle part en quarantaine (correctif d'un défaut antérieur).
+- `EconomySim.spec` : détection du rebirth suivant le prestige corrigée (rebirth effectué, pas éligibilité
+  transitoire) ; modèle du joueur affiné (`docs/ECONOMY.md` §8).
+
+### Ce qui est couvert hors Studio pour les familiers (Phase 4, jalon B)
+- `Pets.spec` (20 tests) : **probabilités** affichées = poids / somme (somme 1, espèces connues, aucun œuf en Robux,
+  Œuf des missions non vendu) ; **tirage** exact sur une grille uniforme de 20 000 aléas ; **achat** en Coins
+  (paiement, instance `p1` niveau 1, compteur) ; **fonds insuffisants**, œuf inconnu, œuf non vendu sans effet ;
+  **œuf gratuit** (consommé, réserve vide refusée, réserve plafonnée) ; **inventaire plein** refusé avant paiement ;
+  **double clic / rejeu** (révision périmée : un seul œuf, un seul paiement) ; **identifiants jamais réutilisés** ;
+  **équipement** (3 emplacements, double équipement, relâcher un équipé refusé) ; tri, doublons, espèce en
+  sommeil ; **bonus** par niveau, **cumul plafonné**, effet réel sur la pousse, le revenu, la chance, les drones et
+  la précision manuelle (drone sans bonus) ; **plafonds globaux** (P(normale) ≥ 46 % à la chance maximale) ;
+  **XP** exponentielle et niveau plafonné ; XP des **récoltes manuelles et de drones** aux seuls équipés ;
+  **rebirth et prestige** sans effet ; **sauvegarde/rechargement** ; **migration v3 -> v4** ; **données
+  malformées** (quarantaine, sommeil, niveau plafonné, compteur et équipement corrigés).
+- Concurrence côté serveur : un seul mutateur par éclosion (`Pets.hatch`), drapeau « éclosion en sauvegarde » et
+  débit 1 / 3 s dans `PetService` (validés en Studio, `docs/TESTING.md` §2.9).
+
+### Ce qui est couvert hors Studio pour les événements (Phase 4, jalon C)
+- `Events.spec` (12 tests) : calendrier **déterministe** (même tranche → même événement, sur tous les serveurs) ;
+  **tirage contrôlé** (≈ 50 % des tranches, Pluie 60 % / Floraison 40 % sur 20 000 tranches) ; **rendez-vous fixes**
+  (12:00 et 20:00 UTC) ; **un seul événement à la fois** et **écart minimal** de 5 min (10 000 tranches) ;
+  **déclenchement** forcé et **expiration** (aucun bonus résiduel, durée forcée plafonnée) ; **arrivée tardive**
+  (début, milieu, fin → même fenêtre et même fin) ; forcé prioritaire sur le planifié ; **Pluie** : chance × 3 plafonnée
+  (P(normale) ≥ 46 %), mutations au moins doublées ; **Floraison** : +50 % de la valeur versé à la récolte pour le
+  **joueur et les drones**, une seule fois, sac inchangé à la vente ; **plusieurs joueurs** ; **rebirth et prestige**
+  pendant un événement ; **sauvegarde** inchangée ; **aucun cumul**.
+
+### Ce qui est couvert hors Studio pour les missions (Phase 4, jalon D)
+- `Quests.spec` (19 tests) : **périodes UTC** (bascule à 00:00, semaine au lundi 00:00) ; **tirage** (3 quotidiennes
+  facile/moyenne/difficile + 2 hebdomadaires, modèles distincts, identifiants uniques, **déterministe**) ;
+  **récompenses** proportionnelles à la difficulté et au revenu ; **éligibilité** (drones, plante débloquée, Mutadex
+  restant, rebirth déjà fait) ; **progression** des récoltes **manuelles et de drones**, Parfait, **mutations**
+  (rares ×8), plante précise, plafonnée à l'objectif ; période échue figée ; **rebirth et prestige** sans effet ;
+  **récupération unique** (Coins gagnés, œuf, boost, décoration ; seconde tentative refusée) ; **expiration** puis
+  nouveau tirage ; **triche** (identifiant inconnu, mission non terminée, sauvegarde trafiquée en quarantaine) ;
+  **concurrence** ; **réserve d'œufs pleine** (refus sans perte) ; **reconnexion / changement de serveur** sans
+  nouveau tirage ; **boosts** (effet, expiration,
+  durée plafonnée) ; **migration v4 -> v5**.
+
 ### Ce qui n'est PAS couvert automatiquement
 Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
 → checklist ci-dessous, déroulée via Studio MCP (§3) ; ce qui exige un humain reste marqué comme tel.
@@ -238,6 +291,12 @@ fenêtres de test sont visibles par le MCP). Ne cocher qu'après exécution rée
 | **Améliorations : mobile** (Phase 3) | *Test › Device* (téléphone) | Menu à 4 boutons sans chevauchement avec le chat ouvert ; panneau ajusté à l'écran, onglets et boutons d'achat utilisables au toucher, textes lisibles |
 | **Améliorations : manette** (Phase 3) | Manette branchée | L2 ouvre le panneau, onglet sélectionné ; croix pour passer d'un onglet aux lignes, A achète (niveau + 1, solde mis à jour), B ferme |
 | **Améliorations : persistance réelle** (Phase 3) | Comme « Sauvegarde réelle » | Niveaux achetés restaurés après Stop / Play ; améliorations Essence perdues et permanentes conservées après un prestige réel |
+| **Mutadex : persistance réelle** (Phase 4) | Comme « Sauvegarde réelle » | Découvertes, compteurs, dates et paliers restaurés après Stop / Play et après un changement de serveur ; ancienne sauvegarde v2 migrée sans perte |
+| **Missions : renouvellement réel** (Phase 4) | Session ouverte à travers 00:00 UTC (ou un lundi 00:00 UTC) ; place publiée | Nouvelles missions annoncées sans reconnexion ; les anciennes non récupérées disparaissent ; changement de serveur juste après : mêmes missions, même progression |
+| **Événements : multijoueur et mobile** (Phase 4) | Serveur local à 2 joueurs ; appareil mobile | Même événement, même compte à rebours pour les deux ; un joueur qui rejoint pendant l'événement voit le bandeau et les effets ; pluie et paillettes fluides sur mobile ; éclairage restauré à la fin |
+| **Familiers : persistance réelle** (Phase 4) | Comme « Sauvegarde réelle » | Éclosion puis arrêt brutal du serveur : le familier est présent au retour (sauvegarde avant confirmation) ; équipement, niveaux et œufs gratuits restaurés après changement de serveur |
+| **Familiers : performance mobile** (Phase 4) | Appareil d'entrée de gamme, 3 familiers équipés, plusieurs joueurs | Images par seconde stables, familiers qui suivent sans saccade, aucune erreur ; panneau Familiers lisible (*Test › Device*) ; manette : L3 ouvre, B ferme |
+| **Mutadex : mobile et manette** (Phase 4) | *Test › Device* ; manette branchée | Menu en grille lisible sans chevauchement avec le chat ; panneau ajusté, cartes défilables au doigt ; R2 ouvre, croix pour parcourir filtres et cartes (défilement automatique), B ferme |
 
 ### 2.5 Phase 3, jalon A (rebirth) — validation Studio MCP du 2026-11-21 (Play solo, API désactivée)
 
@@ -319,6 +378,33 @@ ModalPanel) ; seuils crédités par `grantEarned`.
 | Libellé au niveau 0 | ✅ (correctif) | « −0 % de durée de pousse → −4 % … » remplacé par « Niveau 1 : −4 % de durée de pousse » après la passe (texte plus court ; non revu à l'écran) |
 | Niveau maximum en jeu | ⛔ non exécuté | Exigerait des milliers d'Essence ; refus `max_level` couvert en Lune (`Upgrades.spec`) |
 | Persistance réelle, mobile, vraie manette | ⛔ non vérifiable | Protocole §2.4 |
+
+### 2.8 Phase 4, jalons A à D — validation Studio MCP du 2026-11-21 (Play solo, API désactivée, 3 sessions)
+
+Synchronisation par le plugin Rojo (`rojo serve`) ; récoltes, achats et récupérations faits par les **vrais
+chemins** (remotes `HarvestRequest`, `PetHatch`, `PetEquip`, `QuestClaim`, boutons cliqués, touches simulées) ;
+`DevService` seulement pour fixer une mutation, créditer des Coins / œufs, forcer un événement ou avancer une mission.
+
+| Contrôle | Résultat | Observation |
+|---|---|---|
+| Démarrage | ✅ | « Serveur prêt (17 services) », schéma v5, missions tirées au chargement (jour 20778, semaine 2968), aucune quarantaine ; seuls messages : `rbxassetid://203785492` (absent du dépôt : ressource Roblox) |
+| **A** — Découvertes | ✅ | 5 récoltes Carotte normale → Radioactive : `discovered = true` ×5, Mutadex 5 entrées, palier 10 % accordé une fois (`title_curious_botanist`) |
+| A — Panneau | ✅ | 5/49 (10 %), plus rares, paliers sur une ligne, cartes découvertes / « ??? », filtre Plante → 7 cartes, recherche « geante » → seule « Carotte · Géante », historique (5 lignes, dates locales), badge « Nouveau » effacé à l'ouverture |
+| A — **Défaut corrigé** | ✅ | Bouton Mutadex resté agrandi (×1,095) après des découvertes rapprochées : la pulsation repart désormais de 1 (vérifié : ×1 après 5 découvertes en 2 s). Bouton « Historique » renommé `HistoryToggle` (nom en double avec la liste) |
+| **B** — Éclosion payante | ✅ | « Acheter » Œuf de prairie : 200 000 → 195 000 Coins, Phalène lunaire (Épique), animation de révélation, inventaire 1/50 |
+| B — Œuf gratuit, double clic | ✅ | Deux clics : **un seul** œuf consommé (réserve 2 → 1), `hatched` = 2, identifiants `p1` / `p2` ; mission « Ouvre 5 œufs » 2/5 |
+| B — Équipement, rendu | ✅ | 2/3 équipés, « Bonus actifs : +0.20 chance », doublons « (×2) », attribut `Pets` = `moon_moth:1;moon_moth:1`, 2 modèles de 5 pièces à 4,0–4,2 studs après chaque déplacement, ailes animées |
+| B — XP | ✅ | 4 récoltes → +4 XP pour chaque familier équipé |
+| **C** — Floraison dorée | ✅ | Bandeau sous la barre du haut (compte à rebours), teinte chaude, paillettes (40/s) ; récoltes : +5 (normale), +10 (Brillante) versés immédiatement |
+| C — Fin d'événement | ✅ | Après l'arrêt : bonus 0, bandeau masqué, particules arrêtées, éclairage neutre (`1, 1, 1`) |
+| C — Pluie mutagène | ✅ | Bandeau violet, teinte violette, émetteur 220/s orienté vers le bas à 34 studs au-dessus de la caméra |
+| **D** — Panneau Missions | ✅ | 3 quotidiennes (Facile / Moyenne / Difficile) et 2 hebdomadaires, « Nouvelles missions dans 7 h 12 » (cohérent avec minuit UTC), progression par les vraies récoltes (« mutations ×8 » 3/3) |
+| D — Récupération unique | ✅ | « Récupérer » : +10 000 Coins, +1 Œuf des missions ; 3 rejeux du même identifiant + identifiant inventé + chaîne de 500 caractères : `claimed` reste 1, bouton « Récupérée », pastille effacée |
+| D — Boost Engrais | ✅ | Mission moyenne récupérée : « Boosts actifs : Engrais 9:58 », récolte hors événement : +2 (Carotte 10 × 25 %) |
+| Vente (non-régression) | ✅ | Comptoir (touche E) : sac 15 → 0, +650 Coins, `sells` = 1 |
+| Manette (simulée) | ✅ (correctif) | L1 Rebirth, R1 Prestige, L2 Améliorations, R2 Mutadex, L3 Familiers, R3 Missions, B ferme. **Défaut corrigé** : R3 était capté par le zoom caméra de Roblox (`RbxCameraGamepadZoom`, même priorité) ; raccourcis des panneaux désormais en priorité haute (le zoom caméra par R3 n'est plus disponible) |
+| Console | ✅ | Aucune erreur ni avertissement des scripts du jeu sur les 3 sessions |
+| Non vérifiable ici | ⛔ | Persistance réelle (DataStore en mémoire), changement de serveur, renouvellement réel à 00:00 UTC, arrivée tardive à plusieurs joueurs, mobile réel, vraie manette — protocole §2.4 |
 
 ## 3. Studio MCP (opération manuelle, recommandée)
 

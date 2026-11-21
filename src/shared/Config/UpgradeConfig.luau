@@ -212,7 +212,9 @@ local UpgradeConfig = {
 	List = list,
 	ById = byId,
 	Caps = table.freeze({
-		MaxLuck = 2.5, -- chance totale (1 = base) : E(2,5) ≈ 1,99 contre 1,505 sans amélioration
+		MaxLuck = 2.5, -- chance des améliorations (1 = base) : E(2,5) ≈ 1,99 contre 1,505 sans amélioration
+		-- Plafonds TOUTES SOURCES (améliorations, familiers, événements ; Util/Bonuses) :
+		MaxTotalLuck = 5, -- P(normale) ≥ 46 % ; E(5) ≈ 2,44 (rendements décroissants)
 		MinGrowthFactor = 0.4, -- la pousse ne descend jamais sous 40 % de la durée de base
 		MinDroneIntervalFactor = 0.5, -- l'intervalle des drones ne descend jamais sous 50 %
 	}),

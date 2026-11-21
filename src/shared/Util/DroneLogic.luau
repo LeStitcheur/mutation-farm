@@ -7,7 +7,7 @@ local DroneConfig = require(script.Parent.Parent.Config.DroneConfig)
 local BigNum = require(script.Parent.BigNum)
 local FarmLayout = require(script.Parent.FarmLayout)
 local Growth = require(script.Parent.Growth)
-local Upgrades = require(script.Parent.Upgrades)
+local Bonuses = require(script.Parent.Bonuses)
 
 type PlayerData = Types.PlayerData
 type DroneDef = Types.DroneDef
@@ -23,9 +23,10 @@ function DroneLogic.owned(data: PlayerData, droneId: string): number
 	return if type(count) == "number" then count else 0
 end
 
--- Intervalle effectif entre deux actions d'un drone (améliorations d'efficacité ; délai de grâce inchangé).
+-- Intervalle effectif entre deux actions d'un drone (améliorations × familiers, plafonnés ; délai de grâce
+-- inchangé).
 function DroneLogic.interval(def: DroneDef, data: PlayerData): number
-	return def.interval * Upgrades.droneIntervalFactor(data)
+	return def.interval * Bonuses.droneIntervalFactor(data)
 end
 
 -- Prix du prochain exemplaire quand `owned` sont déjà possédés (entier, arrondi à l'inférieur).

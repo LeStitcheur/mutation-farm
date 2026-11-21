@@ -12,6 +12,11 @@ local FarmLayout = require(script.Parent.FarmLayout)
 local Growth = require(script.Parent.Growth)
 local Inventory = require(script.Parent.Inventory)
 local ProgressionMath = require(script.Parent.ProgressionMath)
+local Mutadex = require(script.Parent.Mutadex)
+local MutadexConfig = require(script.Parent.Parent.Config.MutadexConfig)
+local Bonuses = require(script.Parent.Bonuses)
+local Pets = require(script.Parent.Pets)
+local Quests = require(script.Parent.Quests)
 
 type PlayerData = Types.PlayerData
 
@@ -23,6 +28,11 @@ export type Outcome = {
 	tier: Types.PrecisionTier,
 	bonus: Types.BigNum,
 	itemKey: string,
+	discovered: boolean, -- première récolte de cette combinaison (Mutadex)
+	milestones: { MutadexConfig.MilestoneDef }, -- paliers du Mutadex accordés par cette découverte
+	petLevelUps: { Pets.LevelUp }, -- familiers équipés passés au niveau supérieur (XP de cette récolte)
+	eventBonus: Types.BigNum, -- Floraison dorée (+ Engrais) : part de la valeur versée À LA RÉCOLTE (0 sinon)
+	questsCompleted: { Types.Mission }, -- missions terminées par cette récolte
 }
 
 local HarvestRules = {}
@@ -47,7 +57,16 @@ end
 
 -- Applique une récolte DÉJÀ validée par `check` : objet (avec sa mutation) dans le sac, statistiques, case vidée.
 -- Les drones ne reçoivent jamais de bonus de précision (palier "normal").
-function HarvestRules.apply(data: PlayerData, tileId: string, now: number, source: Types.HarvestSource): Outcome
+-- `eventValueBonus` (Floraison dorée, lu par le serveur à l'horloge serveur au moment de la récolte) : part de la
+-- valeur de l'objet versée immédiatement, joueur ou drone, une seule fois par récolte ; l'objet du sac garde sa
+-- valeur normale à la vente (aucun intérêt à garder son sac pour un événement).
+function HarvestRules.apply(
+	data: PlayerData,
+	tileId: string,
+	now: number,
+	source: Types.HarvestSource,
+	eventValueBonus: number?
+): Outcome
 	local tile = data.farm.tiles[tileId]
 	assert(tile, "HarvestRules.apply : case vide " .. tileId)
 	local mutation = tile.mutation or MutationConfig.NORMAL
@@ -61,11 +80,45 @@ function HarvestRules.apply(data: PlayerData, tileId: string, now: number, sourc
 		data.stats.perfectHarvests += 1
 	end
 	data.farm.tiles[tileId] = nil
-	-- Bonus de précision × multiplicateur de revenu (rebirth…), appliqué une seule fois puis tronqué.
+	-- Bonus de précision (récolte manuelle uniquement) × multiplicateur de revenu (rebirth…) × familiers de
+	-- précision, appliqué une seule fois puis tronqué.
 	local bonus = if tier == "normal"
 		then BigNum.zero()
-		else BigNum.mulNumber(Economy.precisionBonus(tile.plantId, tier), ProgressionMath.incomeMultiplier(data))
-	return { plantId = tile.plantId, mutation = mutation, tier = tier, bonus = bonus, itemKey = key }
+		else BigNum.mulNumber(
+			Economy.precisionBonus(tile.plantId, tier),
+			ProgressionMath.incomeMultiplier(data) * Bonuses.manualMultiplier(data)
+		)
+	-- Mutadex et XP des familiers : même mutateur que la récolte (joueur ou drone) → une culture compte une fois.
+	local discovered = Mutadex.record(data, tile.plantId, mutation, now)
+	local milestones = if discovered then Mutadex.claimMilestones(data, now) else {}
+	local petLevelUps = Pets.grantXp(data, Pets.harvestXp(source, tier))
+	-- Part de valeur versée à la récolte : événement (Floraison dorée) + boost personnel actif (Engrais, missions).
+	local valueShare = (if eventValueBonus and eventValueBonus > 0 then eventValueBonus else 0)
+		+ Quests.valueBoost(data, now)
+	local eventBonus = BigNum.zero()
+	local value = Economy.itemValue(tile.plantId, mutation)
+	if valueShare > 0 and value then
+		eventBonus = BigNum.mulNumber(value, valueShare * ProgressionMath.incomeMultiplier(data))
+	end
+	local questsCompleted = Quests.recordHarvest(data, {
+		plantId = tile.plantId,
+		mutation = mutation,
+		tier = tier,
+		source = source,
+		discovered = discovered,
+	}, now)
+	return {
+		plantId = tile.plantId,
+		mutation = mutation,
+		tier = tier,
+		bonus = bonus,
+		itemKey = key,
+		discovered = discovered,
+		milestones = milestones,
+		petLevelUps = petLevelUps,
+		eventBonus = eventBonus,
+		questsCompleted = questsCompleted,
+	}
 end
 
 return table.freeze(HarvestRules)

@@ -34,6 +34,7 @@ export type Options = {
 
 export type Modal = {
 	frame: Frame,
+	menuButton: TextButton, -- bouton du menu latéral (animations de notification)
 	isOpen: () -> boolean,
 	setOpen: (boolean) -> (),
 }
@@ -95,9 +96,9 @@ function ModalPanel.new(options: Options): Modal
 	local menuButton = Builder.button({
 		Name = options.menuText,
 		LayoutOrder = options.menuOrder,
-		Size = UDim2.fromOffset(170, 58),
+		Size = UDim2.fromOffset(160, 50), -- taille fixée par la grille du menu (HudController)
 		Text = options.menuText,
-		TextSize = 24,
+		TextSize = 20,
 		BackgroundColor3 = options.menuColor,
 		Parent = options.menu,
 	})
@@ -203,12 +204,15 @@ function ModalPanel.new(options: Options): Modal
 	closeButton.Activated:Connect(function()
 		setOpen(false)
 	end)
-	ContextActionService:BindAction(toggleAction, function(_, inputState: Enum.UserInputState)
+	-- Priorité haute : les scripts par défaut de Roblox lient certains boutons de manette à la même priorité que
+	-- BindAction (ex. R3 = zoom de la caméra, constaté en Studio) et les recapturent à chaque apparition du
+	-- personnage. Les raccourcis des panneaux passent donc devant, de façon déterministe.
+	ContextActionService:BindActionAtPriority(toggleAction, function(_, inputState: Enum.UserInputState)
 		if inputState == Enum.UserInputState.Begin then
 			setOpen(not open)
 		end
 		return Enum.ContextActionResult.Sink
-	end, false, table.unpack(options.keys))
+	end, false, Enum.ContextActionPriority.High.Value, table.unpack(options.keys))
 	updateInputHints()
 	UserInputService.LastInputTypeChanged:Connect(updateInputHints)
 	local function watchCamera()
@@ -223,6 +227,7 @@ function ModalPanel.new(options: Options): Modal
 
 	return {
 		frame = frame,
+		menuButton = menuButton,
 		isOpen = function(): boolean
 			return open
 		end,

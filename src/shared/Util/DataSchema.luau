@@ -8,16 +8,21 @@ local GameConfig = require(script.Parent.Parent.Config.GameConfig)
 local PlantConfig = require(script.Parent.Parent.Config.PlantConfig)
 local MutationConfig = require(script.Parent.Parent.Config.MutationConfig)
 local UpgradeConfig = require(script.Parent.Parent.Config.UpgradeConfig)
+local MutadexConfig = require(script.Parent.Parent.Config.MutadexConfig)
+local PetConfig = require(script.Parent.Parent.Config.PetConfig)
+local QuestConfig = require(script.Parent.Parent.Config.QuestConfig)
 local BigNum = require(script.Parent.BigNum)
 local Deep = require(script.Parent.Deep)
 local Economy = require(script.Parent.Economy)
+local Mutadex = require(script.Parent.Mutadex)
 local FarmLayout = require(script.Parent.FarmLayout)
 
 type PlayerData = Types.PlayerData
 type Migration = (any) -> any
 
-local VERSION = 2
+local VERSION = 5
 local MAX_DEPTH = 16
+local MAX_LEGACY_PETS = 1000 -- v1–v3 : au-delà, un compteur d'exemplaires est jugé corrompu (laissé tel quel)
 
 -- Copie défensive d'un BigNum stocké (zéro si absent ou corrompu).
 local function storedBigNum(value: any): any
@@ -44,6 +49,88 @@ local MIGRATIONS: { [number]: Migration } = {
 		progression.cycleCoins = if rebirths == 0 and prestiges == 0 then Deep.copy(earned) else BigNum.zero()
 		progression.prestigeCoins = if prestiges == 0 then Deep.copy(earned) else BigNum.zero()
 		data.stats.totalRebirths = rebirths
+		return data
+	end,
+	-- v3 (Phase 4, Mutadex) : une entrée devient { firstAt, count }. L'ancien format (un horodatage) n'a jamais été
+	-- écrit par le jeu ; s'il existe, il est converti (count = 1 : la récolte de découverte). Rien n'est supprimé ;
+	-- les paliers (mutadexRewards) sont ajoutés vides par la réconciliation.
+	[3] = function(data: any): any
+		if type(data.mutadex) == "table" then
+			for key, value in data.mutadex do
+				if type(value) == "number" then
+					data.mutadex[key] = { firstAt = value, count = 1 }
+				end
+			end
+		end
+		return data
+	end,
+	-- v4 (Phase 4, familiers) : instances uniques { petId, level, xp, obtainedAt }, compteur d'éclosions, œufs
+	-- gratuits. L'ancien contrat (`owned` = exemplaires par espèce, `equipped` = espèces) n'a jamais été écrit par le
+	-- jeu ; s'il existe, chaque exemplaire devient une instance de niveau 1 et les espèces équipées sont reportées
+	-- sur ces instances. Rien n'est supprimé : `owned` reste stocké tel quel et l'ancienne liste équipée est copiée
+	-- dans `pets.legacyEquipped`.
+	[4] = function(data: any): any
+		local pets = data.pets
+		if type(pets) ~= "table" or pets.instances ~= nil then
+			return data -- table recréée par la réconciliation, ou déjà au nouveau format
+		end
+		local meta = data.meta
+		local createdAt = if type(meta) == "table"
+				and type(meta.createdAt) == "number"
+				and meta.createdAt >= 0
+			then meta.createdAt
+			else 0
+		local instances: { [string]: any } = {}
+		local bySpecies: { [string]: { string } } = {}
+		local serial = 0
+		if type(pets.owned) == "table" then
+			local species: { string } = {}
+			for petId, count in pets.owned do
+				if
+					type(petId) == "string"
+					and type(count) == "number"
+					and count >= 1
+					and count % 1 == 0
+					and count <= MAX_LEGACY_PETS
+				then
+					table.insert(species, petId)
+				end
+			end
+			table.sort(species)
+			for _, petId in species do
+				local pool: { string } = {}
+				for _ = 1, pets.owned[petId] do
+					serial += 1
+					local id = "p" .. serial
+					instances[id] = { petId = petId, level = 1, xp = 0, obtainedAt = createdAt }
+					table.insert(pool, id)
+				end
+				bySpecies[petId] = pool
+			end
+		end
+		local equipped: { string } = {}
+		if type(pets.equipped) == "table" then
+			if next(pets.equipped) ~= nil then
+				pets.legacyEquipped = Deep.copy(pets.equipped)
+			end
+			for _, petId in pets.equipped do
+				local pool = if type(petId) == "string" then bySpecies[petId] else nil
+				if pool and #pool > 0 and #equipped < PetConfig.Slots then
+					table.insert(equipped, table.remove(pool, 1) :: string)
+				end
+			end
+		end
+		pets.instances = instances
+		pets.equipped = equipped
+		pets.nextSerial = serial + 1
+		pets.hatched = 0
+		pets.freeEggs = {}
+		return data
+	end,
+	-- v5 (Phase 4, missions) : `quests` (tableaux quotidien et hebdomadaire, jamais tirés : période −1) et `boosts`
+	-- (vide) sont ajoutés par la réconciliation ; les missions de la période sont tirées au chargement par
+	-- QuestService. Aucune donnée existante n'est touchée.
+	[5] = function(data: any): any
 		return data
 	end,
 }
@@ -88,6 +175,7 @@ function DataSchema.template(now: number): PlayerData
 			prestigeCoins = BigNum.zero(),
 		},
 		mutadex = {},
+		mutadexRewards = {},
 		cosmetics = {
 			owned = {},
 			equipped = {},
@@ -95,7 +183,17 @@ function DataSchema.template(now: number): PlayerData
 		pets = {
 			owned = {},
 			equipped = {},
+			instances = {},
+			nextSerial = 1,
+			hatched = 0,
+			freeEggs = {},
 		},
+		quests = {
+			daily = { period = -1, missions = {} },
+			weekly = { period = -1, missions = {} },
+			claimed = 0,
+		},
+		boosts = {},
 		stats = {
 			harvests = 0,
 			perfectHarvests = 0,
@@ -134,15 +232,36 @@ function DataSchema.migrate(
 end
 
 -- Complète récursivement les champs manquants ou mal typés à partir du gabarit (n'écrase jamais une valeur valide).
-function DataSchema.reconcile(target: { [any]: any }, template: { [any]: any })
+export type Replacement = { path: string, value: any }
+
+-- Complète `target` avec les champs manquants du gabarit. Une valeur présente mais d'un autre type que le gabarit
+-- est remplacée par la valeur par défaut ; si `replaced` est fourni, elle y est consignée (chemin, valeur d'origine)
+-- pour être mise en quarantaine par `load` : jamais de suppression silencieuse.
+function DataSchema.reconcile(
+	target: { [any]: any },
+	template: { [any]: any },
+	replaced: { Replacement }?,
+	prefix: string?
+)
 	for key, templateValue in template do
 		local value = target[key]
-		if value == nil or type(value) ~= type(templateValue) then
+		local path = if prefix then prefix .. "." .. tostring(key) else tostring(key)
+		if value == nil then
+			target[key] = Deep.copy(templateValue)
+		elseif type(value) ~= type(templateValue) then
+			if replaced then
+				table.insert(replaced, { path = path, value = value })
+			end
 			target[key] = Deep.copy(templateValue)
 		elseif type(templateValue) == "table" then
-			DataSchema.reconcile(value, templateValue)
+			DataSchema.reconcile(value, templateValue, replaced, path)
 		end
 	end
+end
+
+-- Horodatage Unix plausible : nombre fini ≥ 0.
+local function isTimestamp(value: any): boolean
+	return type(value) == "number" and value == value and value >= 0 and value < math.huge
 end
 
 local function isNonNegativeInteger(value: any): boolean
@@ -289,6 +408,164 @@ function DataSchema.sanitize(data: PlayerData, now: number?): { string }
 		end
 	end
 
+	-- Mutadex (Phase 4) : entrées { firstAt, count } ; paliers horodatés. Jamais réinitialisé.
+	-- Une entrée BIEN FORMÉE hors catalogue (plante ou mutation retirée de la configuration, palier supprimé) reste en
+	-- place, en sommeil : le Mutadex ne compte que le catalogue courant, et elle redevient active si le contenu
+	-- revient (un palier déjà accordé n'est donc jamais accordé deux fois). Seules les valeurs malformées partent en
+	-- quarantaine : la quarantaine est bornée (FIFO) et ne doit pas servir de stockage à des découvertes valides.
+	local raw = data :: any
+	if type(raw.mutadex) ~= "table" then
+		quarantine(data, notes, "mutadex", raw.mutadex, "Mutadex invalide", at)
+		raw.mutadex = {}
+	end
+	for key, value in raw.mutadex do
+		local valid = type(key) == "string"
+			and type(value) == "table"
+			and isTimestamp(value.firstAt)
+			and isNonNegativeInteger(value.count)
+		if not valid then
+			raw.mutadex[key] = nil
+			quarantine(data, notes, "mutadex." .. tostring(key), value, "entrée du Mutadex invalide", at)
+		elseif Mutadex.get(key) == nil then
+			table.insert(notes, "Mutadex : entrée hors catalogue conservée en sommeil (" .. key .. ")")
+		end
+	end
+	if type(raw.mutadexRewards) ~= "table" then
+		quarantine(data, notes, "mutadexRewards", raw.mutadexRewards, "paliers du Mutadex invalides", at)
+		raw.mutadexRewards = {}
+	end
+	local knownMilestones: { [string]: boolean } = {}
+	for _, milestone in MutadexConfig.Milestones do
+		knownMilestones[milestone.id] = true
+	end
+	for key, value in raw.mutadexRewards do
+		if type(key) ~= "string" or not isTimestamp(value) then
+			raw.mutadexRewards[key] = nil
+			quarantine(data, notes, "mutadexRewards." .. tostring(key), value, "palier du Mutadex invalide", at)
+		elseif not knownMilestones[key] then
+			table.insert(notes, "Mutadex : palier hors configuration conservé en sommeil (" .. key .. ")")
+		end
+	end
+
+	-- Familiers (Phase 4, jalon B) : instances « p<n> » bien formées ; espèce retirée de la configuration =
+	-- conservée en sommeil (ni active ni équipable) ; niveau au-delà du maximum plafonné ; liste équipée valide.
+	local pets = raw.pets
+	local maxSerial = 0
+	for key, value in pets.instances do
+		local number = if type(key) == "string" then tonumber(string.match(key, "^p(%d+)$")) else nil
+		if number then
+			maxSerial = math.max(maxSerial, number) -- y compris une instance mise en quarantaine : jamais réutilisé
+		end
+		local valid = number ~= nil
+			and type(value) == "table"
+			and type(value.petId) == "string"
+			and #value.petId <= PetConfig.MaxIdLength
+			and isNonNegativeInteger(value.level)
+			and value.level >= 1
+			and isNonNegativeInteger(value.xp)
+			and isTimestamp(value.obtainedAt)
+		if not valid then
+			pets.instances[key] = nil
+			quarantine(data, notes, "pets.instances." .. tostring(key), value, "familier invalide", at)
+		else
+			if value.level > PetConfig.Level.Max then
+				local path = "pets.instances." .. key .. ".level"
+				quarantine(data, notes, path, value.level, "au-delà du niveau maximum -> plafonné", at)
+				value.level = PetConfig.Level.Max
+				value.xp = 0
+			elseif PetConfig.ById[value.petId] == nil then
+				table.insert(notes, "Familiers : espèce hors configuration conservée en sommeil (" .. key .. ")")
+			end
+		end
+	end
+	-- Numéros d'instance jamais réutilisés : le compteur reste strictement au-dessus du plus grand numéro connu.
+	if not isNonNegativeInteger(pets.nextSerial) or pets.nextSerial <= maxSerial then
+		table.insert(notes, string.format("pets.nextSerial : %s -> %d", tostring(pets.nextSerial), maxSerial + 1))
+		pets.nextSerial = maxSerial + 1
+	end
+	if not isNonNegativeInteger(pets.hatched) then
+		quarantine(data, notes, "pets.hatched", pets.hatched, "compteur d'éclosions invalide -> 0", at)
+		pets.hatched = 0
+	end
+	for key, value in pets.freeEggs do
+		if type(key) ~= "string" or not isNonNegativeInteger(value) then
+			pets.freeEggs[key] = nil
+			quarantine(data, notes, "pets.freeEggs." .. tostring(key), value, "œufs gratuits invalides", at)
+		elseif value > PetConfig.MaxFreeEggs then
+			quarantine(data, notes, "pets.freeEggs." .. key, value, "au-delà de la réserve maximale -> plafonné", at)
+			pets.freeEggs[key] = PetConfig.MaxFreeEggs
+		end
+	end
+	-- Liste équipée : instances existantes d'espèces actives, sans doublon, au plus PetConfig.Slots. Une liste
+	-- corrigée est mise en quarantaine telle quelle (aucun familier n'est perdu : seul l'équipement change).
+	local cleaned: { string } = {}
+	local changed = false
+	for _, id in pets.equipped do
+		local instance = if type(id) == "string" then pets.instances[id] else nil
+		local active = instance ~= nil and PetConfig.ById[instance.petId] ~= nil
+		if active and not table.find(cleaned, id) and #cleaned < PetConfig.Slots then
+			table.insert(cleaned, id)
+		else
+			changed = true
+		end
+	end
+	if changed or #cleaned ~= #pets.equipped then
+		quarantine(data, notes, "pets.equipped", pets.equipped, "familiers équipés invalides -> retirés", at)
+		pets.equipped = cleaned
+	end
+
+	-- Missions (Phase 4, jalon D) : un tableau invalide (période, mission malformée) part en quarantaine tel quel et
+	-- sera tiré à nouveau ; les boosts malformés aussi. Boost inconnu bien formé : conservé, sans effet.
+	local quests = raw.quests
+	for _, kind in { "daily", "weekly" } do
+		local board = quests[kind]
+		local valid = type(board) == "table"
+			and type(board.period) == "number"
+			and board.period % 1 == 0
+			and board.period >= -1
+			and type(board.missions) == "table"
+		if valid then
+			for _, mission in board.missions do
+				local rewards = if type(mission) == "table" then mission.rewards else nil
+				local ok = type(mission) == "table"
+					and type(mission.id) == "string"
+					and #mission.id <= QuestConfig.MaxIdLength
+					and type(mission.template) == "string"
+					and type(mission.difficulty) == "string"
+					and isNonNegativeInteger(mission.target)
+					and mission.target >= 1
+					and isNonNegativeInteger(mission.progress)
+					and mission.progress <= mission.target
+					and (mission.plantId == nil or type(mission.plantId) == "string")
+					and type(mission.claimed) == "boolean"
+					and type(rewards) == "table"
+					and BigNum.isValid(rewards.coins)
+					and not BigNum.isNegative(rewards.coins)
+					and isNonNegativeInteger(rewards.eggs)
+					and (rewards.boost == nil or type(rewards.boost) == "string")
+					and (rewards.decoration == nil or type(rewards.decoration) == "string")
+				if not ok then
+					valid = false
+					break
+				end
+			end
+		end
+		if not valid then
+			quarantine(data, notes, "quests." .. kind, board, "missions invalides -> nouveau tirage", at)
+			quests[kind] = { period = -1, missions = {} }
+		end
+	end
+	if not isNonNegativeInteger(quests.claimed) then
+		quarantine(data, notes, "quests.claimed", quests.claimed, "compteur invalide -> 0", at)
+		quests.claimed = 0
+	end
+	for key, value in raw.boosts do
+		if type(key) ~= "string" or not isTimestamp(value) then
+			raw.boosts[key] = nil
+			quarantine(data, notes, "boosts." .. tostring(key), value, "boost invalide", at)
+		end
+	end
+
 	-- Compteurs.
 	local counters: { { container: any, field: string, path: string } } = {
 		{ container = data.progression, field = "rebirths", path = "progression.rebirths" },
@@ -349,9 +626,14 @@ function DataSchema.load(raw: any, now: number): (PlayerData?, LoadError?, { str
 		data = DataSchema.migrate(raw, version)
 		table.insert(notes, string.format("migration v%d -> v%d", version, VERSION))
 	end
-	DataSchema.reconcile(data, DataSchema.template(now) :: any)
+	local replaced: { Replacement } = {}
+	DataSchema.reconcile(data, DataSchema.template(now) :: any, replaced)
 	data.version = VERSION
 	local typed = data :: PlayerData
+	-- Valeurs d'un type incompatible remplacées par la réconciliation : conservées en quarantaine.
+	for _, item in replaced do
+		quarantine(typed, notes, item.path, item.value, "type incompatible -> valeur par défaut", now)
+	end
 	for _, note in DataSchema.sanitize(typed, now) do
 		table.insert(notes, note)
 	end

@@ -53,15 +53,26 @@ export type PlayerData = {
 		cycleCoins: BigNum, -- Coins gagnés depuis le dernier rebirth (seuil de rebirth)
 		prestigeCoins: BigNum, -- Coins gagnés depuis le dernier prestige (seuil de prestige)
 	},
-	mutadex: { [ItemKey]: number }, -- découverte -> timestamp Unix
+	mutadex: { [ItemKey]: MutadexEntry }, -- Phase 4 : découvertes « plante|mutation » (jamais réinitialisé)
+	mutadexRewards: { [string]: number }, -- paliers du Mutadex accordés -> horodatage Unix (une seule fois)
 	cosmetics: {
 		owned: { [string]: boolean },
 		equipped: { [string]: string },
 	},
 	pets: {
-		owned: { [string]: number },
-		equipped: { string },
+		owned: { [string]: number }, -- obsolète (contrat v1 jamais écrit par le jeu), conservé tel quel depuis la v4
+		equipped: { string }, -- v4 : identifiants d'INSTANCES équipées (≤ PetConfig.Slots), sans doublon
+		instances: { [string]: PetInstance }, -- v4 : familiers possédés, identifiant unique « p<n> »
+		nextSerial: number, -- v4 : prochain numéro d'instance (jamais réutilisé)
+		hatched: number, -- v4 : œufs ouverts (révision attendue : idempotence des éclosions)
+		freeEggs: { [string]: number }, -- v4 : œufs gagnés (missions, objectifs) non ouverts, par type
 	},
+	quests: { -- v5 : missions de la période courante (tirées une fois par le serveur, puis sauvegardées)
+		daily: QuestBoard,
+		weekly: QuestBoard,
+		claimed: number, -- missions récupérées au total (statistique)
+	},
+	boosts: { [string]: number }, -- v5 : boosts temporaires actifs -> fin (horodatage serveur Unix)
 	stats: {
 		harvests: number,
 		perfectHarvests: number,
@@ -76,6 +87,60 @@ export type PlayerData = {
 		lastSeen: number,
 		quarantine: { QuarantineEntry }, -- données retirées par l'assainissement, conservées pour récupération
 	},
+}
+
+-- Entrée du Mutadex : première découverte (horodatage serveur Unix) et nombre de récoltes de la combinaison.
+export type MutadexEntry = {
+	firstAt: number,
+	count: number,
+}
+
+-- Familier possédé (Phase 4, jalon B). Jamais réinitialisé.
+export type PetInstance = {
+	petId: string, -- espèce (PetConfig)
+	level: number, -- 1 … PetConfig.Level.Max
+	xp: number, -- XP vers le niveau suivant (0 au niveau maximum)
+	obtainedAt: number, -- horodatage serveur Unix
+}
+
+-- Missions (Phase 4, jalon D).
+export type MissionRewards = {
+	coins: BigNum, -- déjà multiplié par le revenu du joueur au tirage
+	eggs: number, -- Œufs des missions
+	boost: string?, -- QuestConfig.Boosts
+	decoration: string?, -- QuestConfig.Decorations (cosmétique)
+}
+
+export type Mission = {
+	id: string, -- « d:<période>:<emplacement> » / « w:… » : unique et stable
+	template: string, -- QuestConfig.Templates
+	difficulty: string, -- "easy" | "medium" | "hard"
+	target: number,
+	progress: number, -- ≤ target
+	plantId: string?, -- objectif « harvest_plant »
+	claimed: boolean,
+	rewards: MissionRewards,
+}
+
+export type QuestBoard = {
+	period: number, -- jour UTC (quotidien) ou semaine commençant le lundi (hebdomadaire) ; −1 = jamais tirée
+	missions: { Mission },
+}
+
+-- Familiers répliqués au client (panneau, aperçus des bonus).
+export type ClientPets = {
+	instances: { [string]: PetInstance },
+	equipped: { string },
+	hatched: number,
+	freeEggs: { [string]: number },
+}
+
+-- Résultat d'une éclosion, envoyé APRÈS la tentative de sauvegarde (PetHatched).
+export type HatchResult = {
+	eggId: string,
+	instanceId: string,
+	petId: string,
+	saved: boolean, -- false : écriture différée (stockage indisponible) ; le familier reste acquis en mémoire
 }
 
 -- Donnée inconnue ou incompatible mise de côté au chargement (jamais supprimée silencieusement).
@@ -102,6 +167,11 @@ export type ClientState = {
 	cycleCoins: BigNum,
 	prestigeCoins: BigNum,
 	upgrades: { rebirth: { [string]: number }, permanent: { [string]: number } }, -- niveaux (panneau Améliorations)
+	mutadex: { [ItemKey]: MutadexEntry },
+	mutadexRewards: { [string]: number },
+	pets: ClientPets,
+	quests: { daily: QuestBoard, weekly: QuestBoard },
+	boosts: { [string]: number },
 	harvests: number,
 	perfectHarvests: number,
 }
@@ -115,6 +185,8 @@ export type HarvestResult = {
 	tier: PrecisionTier,
 	bonus: BigNum,
 	source: HarvestSource,
+	discovered: boolean, -- première récolte de cette combinaison (Mutadex)
+	eventBonus: BigNum, -- Floraison dorée : Coins versés à la récolte (0 hors événement)
 }
 
 export type NotifyKind = "info" | "success" | "error"

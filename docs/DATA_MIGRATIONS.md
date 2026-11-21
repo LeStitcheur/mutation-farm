@@ -35,7 +35,10 @@ donnée brute ──> version future ? ── oui ──> refus (aucune écritur
 |---|---|---|
 | 0 | — | Donnée sans champ `version` : traitée comme v0, migrée jusqu'à la version courante |
 | 1 | Phases 0–2 | Schéma initial : monnaies, ferme, graines, sac, améliorations, machines (drones), progression (`rebirths`, `prestiges`), Mutadex, cosmétiques, familiers, statistiques, reçus, méta |
-| **2** | Phase 3, jalon A | Progression : `revision`, `cycleCoins`, `prestigeCoins` ; `stats.totalRebirths` ; `meta.quarantine` |
+| 2 | Phase 3, jalon A | Progression : `revision`, `cycleCoins`, `prestigeCoins` ; `stats.totalRebirths` ; `meta.quarantine` |
+| 3 | Phase 4, jalon A | Mutadex : `mutadex[clé] = { firstAt, count }` (au lieu d'un horodatage) ; `mutadexRewards` (paliers accordés) |
+| 4 | Phase 4, jalon B | Familiers : `pets.instances` (instances uniques), `equipped` = identifiants d'instances, `nextSerial`, `hatched`, `freeEggs` |
+| **5** | Phase 4, jalon D | Missions : `quests.daily` / `quests.weekly` (`period`, `missions`), `quests.claimed` ; `boosts` (fin des boosts temporaires) |
 
 ### Migration v1 → v2 (`MIGRATIONS[2]`)
 - `progression.revision = 0`.
@@ -49,6 +52,37 @@ donnée brute ──> version future ? ── oui ──> refus (aucune écritur
 
 Conséquence : un joueur v1 ayant déjà gagné ≥ 100 000 Coins peut faire son premier rebirth dès son retour.
 
+### Migration v2 → v3 (`MIGRATIONS[3]`, Mutadex)
+- Une entrée `mutadex[clé]` au format v2 (un horodatage, jamais écrit par le jeu avant la Phase 4) devient
+  `{ firstAt = horodatage, count = 1 }` (la récolte de découverte). Rien n'est supprimé.
+- `mutadexRewards` est ajouté vide par la réconciliation ; les paliers déjà atteints sont accordés au chargement
+  suivant par `MutadexService` (une seule fois).
+- Entrées ou paliers malformés → quarantaine ; entrées et paliers bien formés mais absents de la configuration →
+  conservés en sommeil (`docs/MUTADEX.md` §4).
+
+### Migration v3 → v4 (`MIGRATIONS[4]`, familiers)
+- L'ancien contrat (`pets.owned` = nombre d'exemplaires par espèce, `pets.equipped` = espèces) n'a jamais été écrit
+  par le jeu. S'il existe : chaque exemplaire devient une instance `p<n>` de niveau 1 (`obtainedAt` = création du
+  compte), dans l'ordre alphabétique des espèces ; les espèces équipées sont reportées sur ces instances (3 au plus).
+- **Rien n'est supprimé** : `pets.owned` reste stocké tel quel (obsolète, comme `currencies.rebirthTokens`) ;
+  l'ancienne liste équipée est copiée dans `pets.legacyEquipped`. Un compteur > 1 000 est jugé corrompu et
+  n'est pas converti (il reste dans `owned`).
+- `nextSerial` = dernier numéro + 1, `hatched = 0`, `freeEggs = {}`. Une table `pets.instances` déjà présente
+  n'est jamais écrasée.
+
+### Migration v4 → v5 (`MIGRATIONS[5]`, missions)
+- Aucune transformation : `quests` (tableaux de période −1, jamais tirés) et `boosts` (vide) sont ajoutés par la
+  réconciliation ; `QuestService` tire les missions de la période au chargement du profil.
+- Assainissement : un tableau de missions invalide (période, mission malformée, progression > objectif) part en
+  quarantaine tel quel puis est tiré à nouveau ; compteur `claimed` invalide → 0 (quarantaine) ; boost malformé →
+  quarantaine ; boost inconnu bien formé → conservé, sans effet.
+
+### Réconciliation : types incompatibles (correctif Phase 4)
+Avant la Phase 4, `DataSchema.reconcile` remplaçait **silencieusement** une valeur d'un autre type que le gabarit
+(ex. `stats.harvests = "douze"` → 0, `cosmetics = 7` → table vide). Désormais chaque remplacement est consigné
+(chemin + valeur d'origine) et mis en **quarantaine** par `DataSchema.load` (raison « type incompatible -> valeur
+par défaut »), y compris une liste de quarantaine elle-même invalide. Testé (`DataSchema.spec`).
+
 ## 4. Quarantaine (`meta.quarantine`)
 
 Entrée : `{ path, value, reason, at }` (`Types.QuarantineEntry`).
@@ -61,6 +95,11 @@ Entrée : `{ path, value, reason, at }` (`Types.QuarantineEntry`).
   (Phase 3, jalon C : identifiant inconnu ou rangé dans le mauvais arbre, niveau non entier, négatif ou nul →
   retiré ; au-delà du maximum → plafonné, valeur d'origine en quarantaine). Le schéma reste en v2 : les champs
   `upgrades.rebirth` / `upgrades.permanent` existaient déjà, seul leur contenu est désormais validé.
+  Depuis la Phase 4 (v3) : **Mutadex** (entrées et paliers malformés, collection non tabulaire) et toute valeur d'un
+  **type incompatible** remplacée par la réconciliation. Depuis la v4 : **familiers** (instance malformée, niveau
+  au-delà du maximum → plafonné, compteur d'éclosions invalide, œufs gratuits invalides ou au-delà de la réserve,
+  liste équipée corrigée — liste d'origine conservée). Espèces et paliers retirés de la configuration : conservés
+  **en sommeil**, pas en quarantaine (`docs/PETS.md` §8, `docs/MUTADEX.md` §4).
 - La troncature FIFO des reçus (au-delà de 200) est signalée par une note (les reçus retirés sont les plus anciens).
 - Récupération : lire `meta.quarantine` (Studio : `ServerStorage.MutationFarmDev:Invoke("snapshot", userId)`) puis
   restaurer par une migration dédiée si une donnée doit être rendue au joueur.

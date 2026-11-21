@@ -83,7 +83,11 @@ return function()
 			expect(prestigeAt >= 90 * MINUTE and prestigeAt <= 300 * MINUTE).to.equal(true)
 			local firstCycle = EconomySim.eventTimes(sim, "rebirth")[1]
 			local start = sim.now
-			local after = EconomySim.runUntil(sim, eligible, start + 3600)
+			-- Le profil avancé fait son rebirth DANS le pas où il devient éligible : on détecte le rebirth effectué
+			-- (rebirths repartis de 0 au prestige), pas l'éligibilité, qui peut ne jamais être visible entre deux pas.
+			local after = EconomySim.runUntil(sim, function(s)
+				return s.data.progression.rebirths >= 1
+			end, start + 3600)
 			expect(after ~= nil).to.equal(true)
 			local duration = after - start
 			expect(duration < firstCycle).to.equal(true)

@@ -10,6 +10,7 @@ local Types = require(script.Parent.Parent.Types)
 local ProgressionConfig = require(script.Parent.Parent.Config.ProgressionConfig)
 local BigNum = require(script.Parent.BigNum)
 local Upgrades = require(script.Parent.Upgrades)
+local Bonuses = require(script.Parent.Bonuses)
 
 type BigNum = Types.BigNum
 type PlayerData = Types.PlayerData
@@ -80,12 +81,12 @@ function ProgressionMath.prestigeMultiplier(prestiges: number): number
 end
 
 -- Multiplicateur appliqué à toute rentrée de Coins gagnée (vente et bonus de précision) :
--- rebirth × prestige × améliorations de valeur (point d'entrée unique).
+-- rebirth × prestige × améliorations de valeur × familiers (point d'entrée unique).
 function ProgressionMath.incomeMultiplier(data: PlayerData): number
 	local progression = data.progression
 	return ProgressionMath.rebirthMultiplier(progression.rebirths)
 		* ProgressionMath.prestigeMultiplier(progression.prestiges)
-		* Upgrades.valueMultiplier(data)
+		* Bonuses.valueMultiplier(data)
 end
 
 -- Mutation Essence d'un rebirth fait avec `cycleCoins` gagnés pendant le cycle (0 sous le seuil).
@@ -127,8 +128,8 @@ function ProgressionMath.rebirthPreview(data: PlayerData): RebirthPreview
 		eligible = eligible,
 		essence = ProgressionMath.rebirthEssence(n, progression.cycleCoins, Upgrades.essenceMultiplier(data)),
 		multiplier = ProgressionMath.incomeMultiplier(data),
-		-- Les améliorations (Essence et permanentes) sont conservées au rebirth.
-		nextMultiplier = ProgressionMath.rebirthMultiplier(n + 1) * prestigeFactor * Upgrades.valueMultiplier(data),
+		-- Les améliorations (Essence et permanentes) et les familiers sont conservés au rebirth.
+		nextMultiplier = ProgressionMath.rebirthMultiplier(n + 1) * prestigeFactor * Bonuses.valueMultiplier(data),
 	}
 end
 
@@ -194,8 +195,8 @@ function ProgressionMath.prestigePreview(data: PlayerData): PrestigePreview
 		prestigeMultiplier = ProgressionMath.prestigeMultiplier(p),
 		nextPrestigeMultiplier = ProgressionMath.prestigeMultiplier(p + 1),
 		incomeMultiplier = ProgressionMath.incomeMultiplier(data),
-		-- Seules les améliorations permanentes (Primal Cores) survivent au prestige.
-		nextIncomeMultiplier = ProgressionMath.prestigeMultiplier(p + 1) * Upgrades.valueMultiplier(data, "cores"),
+		-- Seules les améliorations permanentes (Primal Cores) survivent au prestige ; les familiers aussi.
+		nextIncomeMultiplier = ProgressionMath.prestigeMultiplier(p + 1) * Bonuses.valueMultiplier(data, "cores"),
 	}
 end
 

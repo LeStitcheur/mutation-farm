@@ -524,21 +524,28 @@ function HudController.Init()
 
 	local coinsLabel, bagLabel, bagFill = buildTopBar(hud)
 
+	-- Menu latéral en grille de 2 colonnes (Graines, Rebirth, Prestige, Améliorations, Mutadex…, boutons ajoutés par
+	-- les contrôleurs) : reste compact sur téléphone quand le nombre de panneaux augmente.
+	local grid = Instance.new("UIGridLayout")
+	grid.CellSize = UDim2.fromOffset(160, 50)
+	grid.CellPadding = UDim2.fromOffset(8, 8)
+	grid.FillDirectionMaxCells = 2
+	grid.SortOrder = Enum.SortOrder.LayoutOrder
 	local menu = Builder.new("Frame", {
 		Name = "Menu",
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 12, 0.5, 0),
-		Size = UDim2.fromOffset(170, 0),
-		AutomaticSize = Enum.AutomaticSize.Y, -- Graines, Rebirth, Prestige… (boutons ajoutés par les contrôleurs)
+		Size = UDim2.fromOffset(328, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 		Parent = hud,
-	}, { Builder.list(Enum.FillDirection.Vertical, 10) }) :: Frame
+	}, { grid }) :: Frame
 	addScale(menu)
 	local seedsButton = Builder.button({
 		Name = "Seeds",
-		Size = UDim2.fromOffset(170, 58),
+		Size = UDim2.fromOffset(160, 50),
 		Text = "Graines",
-		TextSize = 24,
+		TextSize = 20,
 		BackgroundColor3 = Theme.Colors.Green,
 		Parent = menu,
 	})

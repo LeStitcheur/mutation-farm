@@ -25,7 +25,8 @@ Phase 3** avec un simulateur Lune.
 
 ## 2. Récolte et vente
 
-- **Sac** : capacité de base 40 objets (améliorations Phase 3).
+- **Sac** : capacité = 40 + amélioration « Capacité du sac » (Phase 3) + paliers du Mutadex (+5 à 25 %, +10 à 75 %,
+  Phase 4 ; `docs/MUTADEX.md`).
 - **Valeur de vente** = `valeurBase(plante) × multiplicateur(mutation) × M(R) × Mp(P) × A` où `M(R)` et `Mp(P)` sont
   les multiplicateurs de rebirth et de prestige (§4) et `A` celui des améliorations de valeur
   (`docs/PROGRESSION.md` §4), appliqués au total du sac et arrondis à l'inférieur.
@@ -191,45 +192,63 @@ tools/bin/lune.exe run tests/run.luau report
 plein ou que son contenu paie leur prochain achat. **Chaque valeur est la moyenne de 8 parties** (graines 1 à 8) :
 une partie seule est trop sensible aux mutations rares et à l'instant des déblocages.
 
+**Évolutions du modèle (Phase 4)**, rendues nécessaires par le Mutadex (ses places de sac modifiaient le rythme des
+ventes et faisaient apparaître des artefacts) — les tables ci-dessous ont été **remesurées avec ce modèle en fin de
+Phase 4** (le simulateur ne modélise ni familiers, ni événements, ni missions) :
+- **Variabilité du joueur** : réaction ×[0,6 ; 1,4] et cadence ×[0,8 ; 1,2] autour du profil (générateur séparé à
+  graine fixe). Un joueur « métronome » gagnait ou perdait des bonus Parfait selon la phase des allers-retours.
+- **Nombres aléatoires communs** : un flux de tirages de mutation par plante ; la n-ième Citrouille reçoit le même
+  tirage dans deux parties comparées. Sans cela, une Divine changeait de plante d'une partie à l'autre (±30 % de
+  revenu sur 20 min), masquant l'effet réel des améliorations.
+- **Vente par habitude** : un joueur présent va vendre quand son sac atteint la capacité de **base** (ou quand le
+  contenu paie son prochain achat) ; les places en plus servent de tampon aux drones et aux absences. Un sac plus
+  grand ne peut pas nuire à un vrai joueur (il peut vendre aux mêmes moments) : sans cette règle, le modèle naïf
+  « vendre sac plein » le pénalisait à tort (−4 %).
+
 ### A. Coins gagnés par minute selon la graine (10 min, 9 cases, sans amélioration)
 
 | Graine | Actif sans drone | Hybride + 1 drone | Drones seuls (3, vente toutes les 2 min) |
 |---|---|---|---|
-| Carotte | 633 | 708 | 320 |
-| Tomate | 3 144 | 2 444 | 1 442 |
-| Maïs | 7 276 | 5 819 | 4 761 |
-| Citrouille | 16 230 | 13 193 | 11 096 |
-| Champi-lune | 34 720 | 30 580 | 27 900 |
-| Fleur-étoile | 70 184 | 61 799 | 56 469 |
-| Fruit du dragon | 109 912 | 95 738 | 87 188 |
+| Carotte | 585 | 627 | 304 |
+| Tomate | 2 833 | 2 131 | 1 277 |
+| Maïs | 6 902 | 5 481 | 4 564 |
+| Citrouille | 15 374 | 12 474 | 10 649 |
+| Champi-lune | 31 205 | 26 960 | 24 725 |
+| Fleur-étoile | 65 504 | 57 200 | 52 650 |
+| Fruit du dragon | 186 891 | 172 912 | 166 219 |
+
+Valeurs ≈ 5 à 10 % sous celles de la Phase 3 : le joueur simulé n'est plus un métronome (réaction et cadence
+variables). Fruit du dragon : en 10 min, une seule mutation Astrale (×50) ou Divine (×150) dans le flux de cette
+plante suffit à doubler la moyenne de 8 parties — **ordre de grandeur seulement** (bruit des mutations rares).
 
 ### B. Premier rebirth (100 000 Coins gagnés pendant le cycle), partie neuve
 
 | Profil | Moyenne | Min – max | Coins gagnés / min | Part des drones |
 |---|---|---|---|---|
-| 1. Actif sans drone | 14,4 min | 10,6 – 16,1 min | 8 423 | 0 % |
-| 2. Hybride, 1 drone | 18,0 min | 15,8 – 19,2 min | 6 377 | 2 % |
-| 3. Principalement automatisé | 28,4 min | 24,1 – 32,1 min | 3 908 | 98 % |
+| 1. Actif sans drone | 15,2 min | 14,2 – 16,4 min | 8 092 | 0 % |
+| 2. Hybride, 1 drone | 18,6 min | 17,4 – 20,1 min | 6 201 | 4 % |
+| 3. Principalement automatisé | 28,4 min | 26,1 – 30,1 min | 3 971 | 98 % |
 
-Le drone de l'hybride ne prend que 2 % des revenus : un joueur qui réagit en moins de 5 s garde ses récoltes et
-ses bonus (délai de grâce). L'estimation analytique du jalon A (≈ 14 / 22 min) est confirmée.
+Le drone de l'hybride ne prend que 4 % des revenus : un joueur qui réagit en moins de 5 s garde ses récoltes et
+ses bonus (délai de grâce). L'estimation analytique du jalon A (≈ 14 / 22 min) reste confirmée ; les écarts entre
+parties sont plus resserrés qu'en Phase 3 (nombres aléatoires communs).
 
 ### C. Profil 4 (avancé) jusqu'au premier prestige — temps entre rebirths
 
 | Rebirth n° | Atteint à | Durée du cycle | Essence gagnée |
 |---|---|---|---|
-| 1 | 16,5 min | 16,5 min | 103 |
-| 2 | 37,1 min | 20,6 min | 168 |
-| 3 | 1 h 03 | 26,4 min | 252 |
-| 4 | 1 h 42 | 38,5 min | 312 |
-| 5 | 2 h 34 | 52,5 min | 347 |
+| 1 | 16,6 min | 16,6 min | 102 |
+| 2 | 37,6 min | 20,9 min | 171 |
+| 3 | 1 h 05 | 27,9 min | 243 |
+| 4 | 1 h 43 | 38,5 min | 303 |
+| 5 | 2 h 37 | 53,7 min | 344 |
 
-Premier prestige : **2 h 34** en moyenne (2 h 30 – 2 h 40, 8/8 parties), 10 Primal Cores, 17 niveaux
-d'améliorations Essence achetés. L'Essence dépasse parfois le minimum (ex. 312 au lieu de 282) : une vente d'un
-gros sac peut porter les Coins du cycle bien au-delà du seuil d'un coup (bonus de dépassement voulu, ≤ ×2).
+Premier prestige : **2 h 37** en moyenne (2 h 30 – 2 h 46, 8/8 parties), 10 Primal Cores, 17 niveaux
+d'améliorations Essence achetés. L'Essence dépasse parfois le minimum : une vente d'un gros sac peut porter les
+Coins du cycle bien au-delà du seuil d'un coup (bonus de dépassement voulu, ≤ ×2).
 
 ### D. Profil 5 — après le premier prestige
-Premier rebirth en **10,7 min** (contre 16,5 min au tout premier cycle), 5ᵉ rebirth en 1 h 42 : le prestige
+Premier rebirth en **10,7 min** (contre 16,6 min au tout premier cycle), 5ᵉ rebirth en 1 h 38 : le prestige
 accélère sans rendre les cycles instantanés (invariant 12).
 
 ### E. Effets cumulés des mutations
@@ -249,17 +268,20 @@ mutations (tirées dans l'ordre des plantations).
 
 | Amélioration | Niveau | Coût | Actif | Hybride | Automatisé | Hybride / 100 Essence |
 |---|---|---|---|---|---|---|
-| (aucune) | — | — | 26 449 /min | 17 411 /min | 8 085 /min | — |
-| Valeur de vente | 1 | 40 | +17,5 % | +18,7 % | +27,0 % | +46,7 % |
-| Valeur de vente | 5 | 579 | +85,1 % | +100,8 % | +135,1 % | +17,4 % |
-| Vitesse de croissance | 1 | 50 | +4,3 % | +5,6 % | +0,0 % | +11,2 % |
-| Vitesse de croissance | 5 | 791 | +36,8 % | +44,8 % | +18,8 % | +5,7 % |
-| Chance de mutation | 1 | 60 | +4,1 % | +3,9 % | +9,2 % | +6,4 % |
-| Chance de mutation | 5 | 950 | +14,3 % | +18,0 % | +26,6 % | +1,9 % |
-| Efficacité des drones | 1 | 50 | +0,0 % | −0,1 % | +3,6 % | −0,2 % |
-| Efficacité des drones | 5 | 725 | +0,0 % | −0,3 % | +10,9 % | −0,0 % |
-| Capacité du sac | 1 | 30 | +0,5 % | +0,3 % | +10,5 % | +1,1 % |
-| Capacité du sac | 5 | 397 | +4,3 % | +3,2 % | +13,2 % | +0,8 % |
+| (aucune) | — | — | 26 154 /min | 16 668 /min | 7 931 /min | — |
+| Valeur de vente | 1 | 40 | +18,0 % | +24,7 % | +23,5 % | +61,7 % |
+| Valeur de vente | 5 | 579 | +85,1 % | +111,9 % | +152,9 % | +19,3 % |
+| Vitesse de croissance | 1 | 50 | +5,8 % | +10,3 % | −0,0 % | +20,7 % |
+| Vitesse de croissance | 5 | 791 | +35,0 % | +47,7 % | +14,5 % | +6,0 % |
+| Chance de mutation | 1 | 60 | +3,9 % | +4,5 % | +7,3 % | +7,5 % |
+| Chance de mutation | 5 | 950 | +15,3 % | +23,9 % | +24,1 % | +2,5 % |
+| Efficacité des drones | 1 | 50 | +0,0 % | +0,1 % | +3,8 % | +0,2 % |
+| Efficacité des drones | 5 | 725 | +0,0 % | +0,7 % | +22,6 % | +0,1 % |
+| Capacité du sac | 1 | 30 | +0,0 % | +1,0 % | +4,8 % | +3,5 % |
+| Capacité du sac | 5 | 397 | +0,0 % | +1,0 % | +10,2 % | +0,3 % |
+
+Avec le modèle de la Phase 4, **aucune amélioration n'a plus d'effet négatif** (les −0,1 à −0,3 % de la Phase 3
+étaient du bruit de calendrier) ; l'Efficacité des drones niveau 5 rapporte désormais +22,6 % au joueur automatisé.
 
 Constats :
 - Les gains dépassent l'effet direct (+10 % de valeur → +17 à +27 %) : revenu plus élevé = graines suivantes
@@ -278,17 +300,58 @@ Constats :
 
 | Situation | Premier rebirth |
 |---|---|
-| Partie neuve | 14,4 min |
-| Après 1 prestige (×1,58), sans amélioration | 8,9 min |
-| Après 1 prestige + Génétique supérieure 2 (+10 %) | 8,4 min |
-| Après 1 prestige + Héritage agricole 1 (Tomate gardée) | 8,9 min (aucun effet mesurable) |
-| Après 3 prestiges (×3,22) + Génétique 5, Croissance ancestrale 5, Héritage 2 | 4,8 min |
+| Partie neuve | 15,2 min |
+| Après 1 prestige (×1,58), sans amélioration | 9,3 min |
+| Après 1 prestige + Génétique supérieure 2 (+10 %) | 8,8 min |
+| Après 1 prestige + Héritage agricole 1 (Tomate gardée) | 9,3 min (aucun effet mesurable) |
+| Après 3 prestiges (×3,22) + Génétique 5, Croissance ancestrale 5, Héritage 2 | 5,2 min |
 
 ### Décisions et limites
 - **Carotte et Tomate inchangées** : aucune mesure ne justifie de les modifier (cahier des charges).
-- Pas de rééquilibrage des seuils : le rythme mesuré (14–28 min pour le premier rebirth, ≈ 2 h 30 pour le premier
+- Pas de rééquilibrage des seuils : le rythme mesuré (15–28 min pour le premier rebirth, ≈ 2 h 37 pour le premier
   prestige) correspond à la cible « 10–60 min / plusieurs heures » de `docs/GAME_DESIGN.md`.
 - Pistes : rendre Héritage agricole utile dès le niveau 1 (graine plus chère, ou Coins de départ) ; donner un rôle
   à l'Efficacité des drones pour les joueurs actifs ; simuler les extensions de parcelle (Phase 4).
 - Limites du modèle : une seule parcelle (9 cases), joueur sans erreur ni pause, aucune extension, aucun événement ;
   les durées sont des ordres de grandeur, pas des promesses de temps de jeu réel.
+
+## 9. Familiers et plafonds globaux (Phase 4, jalon B ; détail : `docs/PETS.md`)
+
+- **Œufs** : Œuf de prairie 5 000 Coins (≈ 1 min 30 de revenu au stade Tomate), Œuf cristallin 75 000 Coins
+  (≈ 5 min au stade Citrouille), Œuf des missions non vendu. Les Coins sont remis à zéro au rebirth, les familiers
+  jamais : acheter un œuf retarde le déblocage de la graine suivante, c'est un choix assumé.
+- **Bonus** (3 familiers équipés, plafonnés par effet) : revenu ≤ +40 %, pousse ≤ −30 %, chance ≤ +0,60,
+  drones ≤ −30 %, précision manuelle ≤ +150 %. Le revenu des familiers multiplie celui des améliorations
+  (`Bonuses.valueMultiplier`, dans `ProgressionMath.incomeMultiplier`).
+- **Plafonds toutes sources** (`UpgradeConfig.Caps`, appliqués par `Util/Bonuses`) : pousse ≥ 40 % de la durée de
+  base, intervalle des drones ≥ 50 %, **chance totale ≤ 5**. Rendements de la chance (espérance du multiplicateur
+  de vente d'une culture) : E(1) = 1,505 ; E(2,5) = 1,98 ; E(3,1) ≈ 2,12 (améliorations + 2 Phalènes niveau 15) ;
+  E(5) ≈ 2,44 ; P(normale) ≥ 46 % au plafond (testé).
+- Non simulé : `tests/sim` ne modélise ni familiers ni événements ; les invariants restent ceux du §5.
+
+## 10. Événements du monde (Phase 4, jalon C ; détail : `docs/EVENTS.md`)
+
+- **Fréquence** : ≈ 1 événement par heure (tranches de 30 min, 50 % tirées) + 2 rendez-vous quotidiens (Floraison à
+  12:00 et 20:00 UTC) ; 5 min au minimum entre deux événements, jamais deux à la fois.
+- **Pluie mutagène** (5 min) : chance × 3 à la plantation, plafonnée à 5 au total. Pour un joueur sans
+  amélioration, l'espérance du multiplicateur de vente d'une culture semée sous la pluie passe de 1,505 à
+  ≈ 2,10 (+39 %), et les mutations rares (Astrale, Divine) deviennent ≈ 2,2 fois plus probables ; l'effet n'apparaît
+  qu'à la récolte de ces cultures (après la pluie pour les plantes lentes).
+- **Floraison dorée** (10 min) : +50 % de la valeur de chaque récolte, versés à la récolte (× multiplicateur de
+  revenu). Pour un joueur actif, c'est ≈ +50 % de revenu pendant 10 min ; sur une journée (2 rendez-vous et
+  ≈ 9 Floraisons tirées parmi ≈ 23 événements, soit ≈ 1 h 50 de Floraison), le gain moyen est ≈ +4 % pour qui
+  joue en continu.
+- Non simulé (`tests/sim`) : les ordres de grandeur ci-dessus sont calculés à partir des formules, pas mesurés.
+
+## 11. Missions (Phase 4, jalon D ; détail : `docs/QUESTS.md`)
+
+- **Récompenses en Coins** = base × multiplicateur de revenu au tirage : quotidiennes 1 500 / 4 000 / 10 000,
+  hebdomadaires 40 000 / 100 000. Pour un joueur neuf (revenu ≈ 3 000 Coins/min au stade Tomate), les trois
+  quotidiennes rapportent ≈ 5 min de revenu ; l'objectif chiffré (40 à 300 récoltes) représente 5 à 30 min de jeu.
+  Le multiplicateur garde ce rapport après les rebirths et prestiges.
+- **Œufs des missions** : 1 par jour (difficile), 5 par semaine (hebdomadaires) → ≈ 12 œufs gratuits par semaine
+  pour un joueur assidu ; c'est la seule source de l'Œuf des missions (Feu follet primal 4 %).
+- **Boosts** : Engrais (+25 % de valeur versés à la récolte, 10 min) ≈ +25 % de revenu actif pendant 10 min ;
+  Rosée chanceuse (chance × 1,5 à la plantation, 15 min), plafonnée avec tout le reste à 5.
+- Les Coins de mission comptent comme gagnés : ils avancent le rebirth (≈ 15 % du premier seuil pour les trois
+  quotidiennes d'un joueur neuf).

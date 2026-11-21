@@ -187,6 +187,11 @@ local function onHarvestResult(result: Types.HarvestResult)
 	if result.source == "drone" then
 		text = "Drone : " .. text
 	end
+	-- Floraison dorée : part de la valeur versée à la récolte (décidée par le serveur).
+	local eventBonus = if result.eventBonus then BigNum.sanitize(result.eventBonus) else BigNum.zero()
+	if not BigNum.isZero(eventBonus) then
+		text ..= "\nFloraison +" .. Format.bigNum(eventBonus)
+	end
 	-- Mutation (décidée par le serveur) : ligne dédiée, dans la couleur de la mutation.
 	local mutation = mutatedDef(result.mutation)
 	if mutation then
