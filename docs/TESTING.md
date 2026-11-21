@@ -13,7 +13,7 @@ pwsh scripts/check.ps1 -Fix   # applique StyLua puis vérifie le reste
 | Formatage | StyLua 2.6 | style homogène (tabs, 120 colonnes) |
 | Lint | Selene 0.32 (std `luau` + `roblox_lite.yml`) | variables inconnues, ombres, tables mixtes… |
 | Typage | luau-lsp 1.70 `analyze`, mode `--!strict`, définitions Roblox officielles | erreurs de types, API Roblox mal utilisées |
-| Tests unitaires | Lune 0.11 + `tests/TestEZLite.luau` | logique pure : BigNum, économie, croissance, mutations, schéma de données, resets, géométrie, verrou de session (simulation multi-serveurs), attribution des parcelles (isolation) |
+| Tests unitaires | Lune 0.11 + `tests/TestEZLite.luau` | logique pure : BigNum, économie, croissance, mutations, drones, schéma de données (migrations, quarantaine), progression et rebirth (seuils, Essence, resets, concurrence), géométrie, verrou de session (simulation multi-serveurs), attribution des parcelles (isolation) |
 | Build | `rojo build` → `build/MutationFarm.rbxlx` | le projet est constructible |
 
 ### Tests unitaires
@@ -53,6 +53,22 @@ pwsh scripts/check.ps1 -Fix   # applique StyLua puis vérifie le reste
 - `DroneEconomy.spec` (7 tests) : simulation 10 min Carotte/Tomate (§ ECONOMY 7) — sac ≤ 40, aucun bonus drone,
   récoltes ≤ production, ventes jamais réduites, drones seuls croissants, rentabilité du premier drone, perte ≤ 1 %
   pour un joueur attentif (délai de grâce). Contrôle de mutation : `graceDelay = 0` fait échouer 3 tests.
+
+### Ce qui est couvert hors Studio pour le rebirth (Phase 3, jalon A)
+Ce sont des **simulations** Lune : elles ne valent pas validation du vrai DataStore (§2.4).
+- `Progression.spec` (12 tests) : seuils exacts `100 000 × 3,2ⁿ` pour n = 0..10, croissance stricte et écart relatif
+  borné jusqu'à n = 200 (au-delà de 10¹⁵) ; `M(R)` ; invariant 7 (R = 0..60) ; Essence 100 / 168 / plafond ×2, rien
+  sous le seuil ; éligibilité sur les Coins **gagnés** du cycle et non sur le solde ; aperçu ; `recordEarnings`.
+- `Resets.spec` (7 tests) : reset et récompense (168 Essence, révision + 1) ; **conservation profonde** de tous les
+  champs non listés ; refus sous le seuil ou avec une révision périmée **sans aucune modification** ; double requête :
+  100 appels avec la même révision = 1 récompense ; donnée sérialisable et rechargeable ; structure du prestige.
+- `RebirthConcurrency.spec` (6 tests) : récolte joueur et cible de drone préparées avant le reset puis refusées ;
+  sac vidé ; ventes et bonus au nouveau multiplicateur (×1,365 : 136 et 6) ; sauvegardes simulées toujours
+  cohérentes (jamais de récompense sans reset) ; requête rejouée après restauration refusée (révision persistée).
+- `DataSchema.spec` (17 tests) : migration v1 → v2 nominale et défensive, quarantaine (aucune suppression
+  silencieuse), valeur non sérialisable gardée en texte, FIFO borné.
+- `Format.spec` : affichage des multiplicateurs (`×1,365`, tronqué au millième).
+- Non couvert ici : `RebirthService` (verrou `busy`, débit, `SaveNow`), le panneau client → Studio (§2.5).
 
 ### Ce qui n'est PAS couvert automatiquement
 Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
@@ -179,6 +195,37 @@ fenêtres de test sont visibles par le MCP). Ne cocher qu'après exécution rée
 | **Sauvegarde réelle** (ligne 12 + drones) | Publier la place (privée) **avec accord**, *Game Settings › Security › Enable Studio Access to API Services*, rouvrir | Plus d'avertissement « MÉMOIRE » ; Stop puis Play : Coins, sac, graines, mutations des cultures et nombre de drones restaurés ; drones recréés une seule fois ; pas de duplication |
 | **Mobile** (ligne 14 + station) | *Test › Device* : un téléphone (ex. iPhone), relancer Play | HUD lisible sans chevauchement ; invites de récolte, de vente et de la station utilisables au toucher (appui long 0,4 s sur la station) ; panneau Graines ajusté à l'écran ; chat ouvert vs bouton Graines |
 | **Manette** (ligne 15 + station) | Brancher une manette (ou émulateur de manette de Studio) | Y ouvre le panneau avec sélection auto du 1ᵉʳ bouton, croix directionnelle pour naviguer, A pour valider, B pour fermer ; invites (récolte, vente, station) déclenchées par X |
+| **Rebirth : persistance réelle** (Phase 3) | Comme « Sauvegarde réelle » ; en Studio, créditer le seuil avec `ServerStorage.MutationFarmDev:Invoke("grantEarned", userId, 100000)` (barre de commande serveur) | Rebirth confirmé → Stop immédiat → Play : rebirths = 1, Essence +100, Coins 0, Carotte seule, aucun drone ; jamais d'Essence sans le reset ; Stop pendant la transition : état avant **ou** après, jamais un mélange |
+| **Rebirth : mobile** (Phase 3) | *Test › Device* (téléphone), relancer Play | Bouton Rebirth sous Graines, panneau ajusté à l'écran (rien de coupé), « Rebirth… », « Annuler » et « Confirmer » utilisables au toucher ; chat masqué pendant l'ouverture puis restauré |
+| **Rebirth : manette** (Phase 3) | Manette branchée | L1 ouvre le panneau (sélection auto de l'action), A sur « Rebirth… » → « Annuler » sélectionné, « Confirmer » inactif 1,5 s, B revient à l'écran d'information puis ferme |
+
+### 2.5 Phase 3, jalon A (rebirth) — validation Studio MCP du 2026-11-21 (Play solo, API désactivée)
+
+Build de la branche `phase-3/progression` (RebirthService, DevService, RebirthController, PanelHub présents ;
+10 services, console sans erreur ni avertissement hors repli mémoire). Seuils crédités par
+`MutationFarmDev:Invoke("grantEarned", …)` (Coins **gagnés**, outil Studio) ; drone, graine Tomate, récoltes et vente
+réalisés en jeu. État lu par `Invoke("snapshot", …)` côté serveur et par le HUD côté client.
+
+| Contrôle | Statut | Constat |
+|---|---|---|
+| Profil neuf en schéma v2 | ✅ | `version = 2`, `revision = 0`, `cycleCoins = prestigeCoins = 0`, `totalRebirths = 0`, quarantaine vide |
+| Bouton et touche | ✅ | Bouton doré « Rebirth » sous « Graines » (menu 2 × 58 px), indice « R » ; R ouvre, clic sur le bouton ouvre |
+| Panneau sous le seuil | ✅ | « Rebirths réalisés : 0 », « Rebirth n° 1 : gagne 100K Coins pendant ce cycle (… le solde actuel ne compte pas) », barre 0 / 100K (0 %), « Revenus : ×1 maintenant → ×1,365 », listes Perdu / Conservé, bouton gris « Seuil non atteint » ; capture : aucun chevauchement, échelle 0,90 à 1155 × 793 |
+| Un panneau à la fois, chat | ✅ | G ouvre Graines et ferme Rebirth, chat toujours masqué ; fermeture → `CoreGuiType.Chat` et `ChatWindowConfiguration` réactivés |
+| Panneau éligible | ✅ | Après 100 000 gagnés : 100K / 100K (100 %), « Récompense : +100 Mutation Essence », bouton doré « Rebirth… » |
+| Confirmation en 2 étapes | ✅ | Récapitulatif « Confirmer le rebirth n° 1 ? Tu perds : … Tu gagnes : +100 Mutation Essence et des revenus ×1,365. » ; clic sur « Confirmer » 0,25 s après l'ouverture **sans effet** (révision 0, Essence 0) ; « Annuler » revient à l'écran d'information ; « Confirmer » rouge et actif après 1,5 s |
+| Rebirth n° 1 (reset et récompense) | ✅ | Avant : 97 750 Coins, Tomate débloquée et sélectionnée, 1 drone, sac rempli (joueur + drone), cultures Tomate/Carotte. Après : `rebirths = 1`, `revision = 1`, `totalRebirths = 1`, Essence 100, Coins 0, Carotte seule (sélectionnée), sac vide, aucun drone (0 ancre serveur, 0 modèle client), 9 cases replantées en Carotte, `cycleCoins = 0` |
+| Conservation | ✅ | Parcelles (`main`), `coinsEarned = 100 000`, `prestigeCoins = 100 000`, `harvests = 15`, quarantaine vide |
+| Client après rebirth | ✅ | Panneau fermé, chat restauré, HUD à 0, panneau : « Rebirths réalisés : 1 », 0 / 320K, « ×1,365 maintenant → ×1,76 » |
+| Refus | ✅ | Révision périmée (0) : ignorée sans message ni effet ; bonne révision sous le seuil : « Pas encore assez de Coins gagnés pendant ce cycle pour un rebirth. », rien ne change ; charges invalides (`"1"`, NaN, 1,5, −1, 2⁴⁰) ignorées |
+| Multiplicateur à la vente | ✅ | Sac de 5 Carottes + 2 Carottes Brillantes (base 90) vendu **122** = ⌊90 × 1,365⌋ ; comptés dans `cycleCoins`, `prestigeCoins` et `coinsEarned` |
+| Requêtes multiples | ✅ | Au seuil 320 000 : 10 `RebirthRequest(1)` envoyées d'un coup → **un seul** rebirth (Essence 100 → 268 = +168, `revision = 2`), une seule notification « Rebirth 2 ! +168 Mutation Essence · revenus ×1,76 » (le limiteur de débit absorbe aussi les doublons) |
+| Révision périmée au seuil | ✅ | Seuil 1 024 000 atteint, `RebirthRequest(1)` alors que la révision est 2 (jeton du limiteur rechargé) → refus, rien ne change ; le panneau affiche « +227 Mutation Essence », « ×1,76 → ×2,185 » |
+| Touches manette (simulées) | ✅ partiel | `ButtonL1` ouvre le panneau ; `ButtonB` revient de la confirmation à l'information puis ferme (chat restauré). Les entrées simulées restent de type `Keyboard` : sélection automatique et indices « L1 » / « B » non vérifiables → vraie manette (§2.4) |
+| Fermeture | ✅ | Bouton X (souris), R et B ferment ; chat restauré |
+| Persistance réelle d'un rebirth | ⛔ non vérifiable | Store mémoire (pas d'accès API) ; sauvegardes cohérentes couvertes **en simulation** Lune (`RebirthConcurrency.spec`), protocole §2.4 |
+| Mobile | ⛔ non vérifiable | Pas de contrôle de l'émulateur ; même mise à l'échelle que le panneau Graines (`Theme.fitScale`) ; protocole §2.4 |
+| Concurrence récolte/drone pendant le reset | ⛔ non reproductible à la main | Fenêtre d'une seule image ; garantie par le mutateur synchrone, couverte en Lune (`RebirthConcurrency.spec`) |
 
 ## 3. Studio MCP (opération manuelle, recommandée)
 
@@ -201,3 +248,7 @@ Limites constatées des outils (2026-11-20) :
   Lire l'état joueur via le HUD (répliqué par `StateSync`) ou les attributs des cases `FarmTile`.
 - Sans plugin Rojo dans Studio, un correctif n'est visible qu'après `scripts/check.ps1` puis réouverture de
   `build/MutationFarm.rbxlx` (fermer l'ancienne place **sans enregistrer**, sinon elle écrase le build).
+- Outils de test serveur (Phase 3, Studio uniquement) : `DevService` crée `ServerStorage.MutationFarmDev`
+  (`BindableFunction`), utilisable depuis `execute_luau` côté **Server** malgré l'isolation des VM :
+  `Invoke("grantEarned", userId, montant)` crédite des Coins **gagnés** (comptent pour le cycle) ;
+  `Invoke("snapshot", userId)` renvoie la donnée serveur en JSON (rebirths, Essence, révision, quarantaine…).

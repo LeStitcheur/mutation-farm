@@ -21,20 +21,21 @@ src/
   shared/   -> ReplicatedStorage.Shared
     Types.luau            Contrats de données (PlayerData, TileState, ClientState…)
     Net.luau              Noms et accès aux RemoteEvents
-    Config/               GameConfig, PlantConfig, MutationConfig, DroneConfig (gelées)
+    Config/               GameConfig, PlantConfig, MutationConfig, DroneConfig, ProgressionConfig (gelées)
     Util/                 Logique pure : BigNum, Format, Growth, Economy, Inventory, MutationRoll,
                           DataSchema, Resets, FarmLayout, ClientView, Signal, Deep, SessionLock, SlotAllocator,
-                          HarvestRules, DroneLogic
+                          HarvestRules, DroneLogic, ProgressionMath
   server/   -> ServerScriptService.Server
     init.server.luau      Bootstrap des services
     Config/MutationOdds   Poids de mutation (jamais répliqués)
     Infra/                DataStoreAdapter, RateLimiter, Notifier
     Services/             DataService, EconomyService, PlantService, MutationService, FarmService, HarvestService,
-                          DroneService, SyncService
+                          DroneService, RebirthService, DevService (Studio uniquement), SyncService
   client/   -> StarterPlayer.StarterPlayerScripts.Client
     init.client.luau      Bootstrap des contrôleurs
-    Controllers/          StateController, PlantRenderer, HarvestController, HudController, DroneRenderer
-    UI/                   Theme, Builder
+    Controllers/          StateController, HudController, RebirthController, PlantRenderer, HarvestController,
+                          DroneRenderer
+    UI/                   Theme, Builder, PanelHub (un panneau à la fois, chat masqué)
     Visuals/              PlantVisuals (modèles procéduraux)
 tests/
   run.luau                Runner Lune (simule require(script…) et game:GetService)
@@ -51,20 +52,24 @@ DataService ─┬─> EconomyService ──> PlantService ──> FarmService �
              └─> SyncService              MutationService ──┘
 ```
 (`MutationService` ne dépend que de configurations : `MutationOdds`, `MutationConfig`, `MutationRoll`.
-`DroneService` dépend de `HarvestService`, `FarmService`, `EconomyService` et `DataService` ; rien ne dépend de lui.)
+`DroneService` dépend de `HarvestService`, `FarmService`, `EconomyService` et `DataService`.
+`RebirthService` dépend de `DataService`, `FarmService` et `DroneService` ; `DevService` de `DataService` et
+`EconomyService` ; rien ne dépend d'eux.)
 
 | Service | Responsabilité | API publique principale |
 |---|---|---|
 | **DataService** | Chargement/sauvegarde, verrou de session, autosave, migrations | `GetData`, `Update`, `IsLoaded`, `SaveNow`, signaux `ProfileLoaded`, `ProfileReleasing`, `Changed` |
-| **EconomyService** | Coins, vente du sac | `AddCoins`, `TrySpendCoins`, `SellAll` |
+| **EconomyService** | Coins, vente du sac (× multiplicateur de rebirth, calculé dans le mutateur) ; tout gain alimente l'historique et les cycles (`ProgressionMath.recordEarnings`) | `AddCoins`, `TrySpendCoins`, `SellAll` |
 | **PlantService** | Graines (déblocage, sélection), durée de pousse effective | `GetSelectedSeed`, `ComputeGrowTime`, `UnlockSeed`, `SelectSeed` |
-| **FarmService** | Parcelles (attribution, construction), état des cases, replantation | `PlantTile`, `GetTilePart`, `OwnsTile`, `GetPlotModel`, `GetPlotOrigin`, signal `PlotReady` |
+| **FarmService** | Parcelles (attribution, construction), état des cases, replantation | `PlantTile`, `ReplantEmpty`, `GetTilePart`, `OwnsTile`, `GetPlotModel`, `GetPlotOrigin`, signal `PlotReady` |
 | **HarvestService** | Récoltes joueur et drone (règles communes `HarvestRules`), bonus de précision (joueur seulement), notification des mutations ≥ ×8 | `Harvest`, `HarvestForDrone` |
 | **SyncService** | Réplication de l'état joueur (coalescée, ≤ 10 Hz) | — |
 | **MutationService** | Tirage pondéré exclusif d'une mutation par plantation (`Random` serveur, poids `MutationOdds`) ; valide la configuration au démarrage | `Roll` |
-| **DroneService** | Station d'achat (ProximityPrompt serveur, propriétaire seulement), flotte sauvegardée (`machines.drones`), **une** boucle serveur pour tous les drones, ancres `FarmDrone` | `Buy` |
+| **DroneService** | Station d'achat (ProximityPrompt serveur, propriétaire seulement), flotte sauvegardée (`machines.drones`), **une** boucle serveur pour tous les drones, ancres `FarmDrone` | `Buy`, `Refresh` |
+| **RebirthService** | Rebirth (Phase 3, jalon A) : verrou par joueur, débit, transition atomique `Resets.rebirth` (§7.1), replantation, flotte vidée, sauvegarde immédiate | `Rebirth` |
+| **DevService** | Outils de test **Studio uniquement** (`RunService:IsStudio()`) : `ServerStorage.MutationFarmDev` (BindableFunction, inaccessible aux clients) — `grantEarned`, `snapshot` | — |
 | *AutomationService* | Phase 4 (drones collecteurs, vente auto, hors ligne) | |
-| *RebirthService, PrestigeService* | Phase 5 | |
+| *PrestigeService* | Phase 3, jalon B | |
 | *PurchaseService* | Phase 6 | |
 
 Convention : chaque module service expose `Init()` (connexions, création d'instances) et `Start()` (boucles,
@@ -77,6 +82,7 @@ traitement des joueurs). `DataService.Start` est appelé en **dernier** pour que
 | `HarvestRequest` | C→S | `tileId: string` | type, longueur ≤ 32, 8 req/s, propriété de la case, maturité (horloge serveur), distance ≤ 20 studs, capacité du sac |
 | `UnlockSeed` | C→S | `plantId: string` | type, 4 req/s, existence, ordre séquentiel, solde |
 | `SelectSeed` | C→S | `plantId: string` | type, 4 req/s, graine débloquée |
+| `RebirthRequest` | C→S | `revision: number` (révision de progression affichée) | type, fini, entier, 0 ≤ r < 2³¹, 0,5 req/s, verrou par joueur ; révision = révision courante (sinon refus sans effet), seuil de Coins gagnés pendant le cycle |
 | `ClientReady` | C→S | — | 1 req/s ; si profil chargé : renvoi de `LoadStatus` + `StateSync` (rattrape les événements émis avant la connexion des écouteurs) |
 | `StateSync` | S→C | `ClientState` | — |
 | `HarvestResult` | S→C | `{ tileId, plantId, mutation, tier, bonus, source }` (`source` : `"player"` / `"drone"`) | — |
@@ -130,8 +136,10 @@ multi-serveurs ; `DataService` ne fait que les appliquer dans `UpdateAsync`)
 1. **Chargement** : `UpdateAsync` ; si `session` appartient à un autre serveur et `heartbeat` < 120 s → verrou actif,
    la transformation retourne `nil` (aucune écriture), nouvelle tentative toutes les 5 s jusqu'à 130 s puis kick.
    Sinon on écrit notre `session` (vol du verrou périmé) et on lit `data`.
-2. **Migration** : `DataSchema.load` → migrations `version → VERSION`, réconciliation avec le gabarit, assainissement
-   (plantes inconnues retirées). Une version **future** (serveur obsolète) refuse le chargement **sans écrire**.
+2. **Migration** : `DataSchema.load` → migrations `version → VERSION` (schéma **v2** depuis la Phase 3), réconciliation
+   avec le gabarit, assainissement : toute valeur retirée ou corrigée part en quarantaine (`meta.quarantine`), jamais
+   supprimée silencieusement — voir `docs/DATA_MIGRATIONS.md`. Une version **future** (serveur obsolète) refuse le
+   chargement **sans écrire**.
 3. **Autosave** toutes les 45 s (rafraîchit `heartbeat`). Avant chaque écriture : copie profonde + `DataSchema.validate`
    (JSON-safe) ; donnée invalide = pas d'écriture.
 4. **Perte de verrou** : si un autre serveur détient la session lors d'une sauvegarde, la transformation annule,
@@ -141,6 +149,17 @@ multi-serveurs ; `DataService` ne fait que les appliquer dans `UpdateAsync`)
    le verrou porte notre propre identifiant de session et serait sinon repris sur une donnée antérieure.
 6. **Jamais** de jeu sans données chargées : en cas d'échec, kick avec message (aucune sauvegarde d'un gabarit vide).
 7. **Studio** : si l'accès API est désactivé, repli automatique sur un store mémoire (avertissement en console).
+
+### 7.1 Transitions de progression (rebirth ; prestige au jalon B)
+
+Règles et listes exactes : `docs/PROGRESSION.md`. Principe :
+1. Le client n'envoie que la `revision` de progression qu'il affiche.
+2. Validation, reset et récompense s'exécutent dans **un seul** mutateur synchrone (`Resets.rebirth` dans
+   `DataService.Update`) : aucune récolte, vente ou tâche de drone ne peut s'intercaler ; une révision périmée
+   (requête rejouée, doublée ou concurrente) est refusée sans effet ; `revision + 1` à chaque transition.
+3. Verrou `busy[player]` pendant la transition (replantation, flotte, sauvegarde) : une seule transition à la fois.
+4. `SaveNow` immédiat ; chaque enregistrement contient l'état avant **ou** après (jamais de récompense sans reset).
+   Échec : avertissement, l'autosave réessaie avec le même état cohérent.
 
 ## 8. Achats (Phase 6 — conception figée)
 
@@ -162,7 +181,9 @@ sérialisation directe. Monnaies et valeurs : `BigNum`. Compteurs (niveaux, rebi
 - Toute entrée client est typée, bornée et limitée en débit (`RateLimiter`, seau à jetons par joueur).
 - Le client n'envoie jamais de montant, de prix, de timestamp ni de résultat aléatoire.
 - Les probabilités de mutation restent dans `ServerScriptService`.
-- Aucun `loadstring`, aucun `HttpService` sortant.
+- Aucun `loadstring`, aucun `HttpService` sortant (`DevService` n'utilise que `JSONEncode`, en Studio).
+- Outils de test (`DevService`) : créés seulement si `RunService:IsStudio()`, exposés par une `BindableFunction`
+  dans `ServerStorage` (jamais répliquée, inaccessible aux clients) ; aucun effet sur un serveur Roblox.
 - Limites acceptées (prototype) : un client automatisé peut viser le palier Parfait (les attributs `PlantedAt`/`GrowTime`
   sont lisibles) — gain borné à +50 % et au débit limité ; l'autosave fait une seule tentative toutes les 45 s
   (une panne DataStore > 120 s peut faire perdre le verrou et expulser le joueur, données intactes au dernier succès).

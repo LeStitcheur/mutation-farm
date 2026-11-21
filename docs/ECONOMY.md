@@ -1,8 +1,9 @@
 # MUTATION FARM — Économie
 
 > Source de vérité des valeurs : `src/shared/Config/PlantConfig.luau`, `src/shared/Config/GameConfig.luau`,
-> `src/server/Config/MutationOdds.luau`. Les invariants ci-dessous sont **testés automatiquement**
-> (`tests/specs/Config.spec.luau`, `Economy.spec.luau`, `MutationRoll.spec.luau`, `Mutations.spec.luau`).
+> `src/shared/Config/ProgressionConfig.luau`, `src/server/Config/MutationOdds.luau`. Les invariants ci-dessous sont
+> **testés automatiquement** (`tests/specs/Config.spec.luau`, `Economy.spec.luau`, `MutationRoll.spec.luau`,
+> `Mutations.spec.luau`, `Progression.spec.luau`, `RebirthConcurrency.spec.luau`).
 
 ## 1. Plantes (Phase 1, implémenté)
 
@@ -25,9 +26,11 @@ Phase 3** avec un simulateur Lune.
 ## 2. Récolte et vente
 
 - **Sac** : capacité de base 40 objets (améliorations Phase 3).
-- **Valeur de vente** = `valeurBase(plante) × multiplicateur(mutation)` (× multiplicateurs d'améliorations, Phase 3+).
-- **Bonus de précision** (Coins instantanés, arrondis à l'inférieur) :
-  Parfait (≤ 1,5 s) = 50 % de la valeur de base, Bien (≤ 5 s) = 20 %.
+- **Valeur de vente** = `valeurBase(plante) × multiplicateur(mutation) × M(R)` où `M(R)` est le multiplicateur de
+  rebirth (§4), appliqué au total du sac et arrondi à l'inférieur (améliorations : jalon C).
+- **Bonus de précision** du joueur (Coins instantanés, arrondis à l'inférieur) :
+  Parfait (≤ 1,5 s) = 50 % de la valeur de base, Bien (≤ 5 s) = 20 %, puis `× M(R)` (jamais la mutation).
+- **Coins gagnés** (ventes + bonus) : alimentent `stats.coinsEarned` et les compteurs de cycle (`docs/PROGRESSION.md`).
 
 ## 3. Mutations (Phase 2, implémenté)
 
@@ -59,24 +62,33 @@ Règles :
 - Une récolte ≥ ×8 (Cristallisée et au-delà) déclenche une notification (`GameConfig.Mutations.NotifyMinMultiplier`).
 - Hors périmètre Phase 2 actuel : Mutation Essence, Mutadex, Pluie mutagène, annonce serveur de la Divine.
 
-## 4. Rebirth et Prestige (Phase 5, formules contractuelles, non branchées au gameplay)
+## 4. Rebirth et Prestige (Phase 3 ; détail : `docs/PROGRESSION.md`)
 
-- **Coût de rebirth** n (n = rebirths déjà faits) : `5·10⁷ × 6ⁿ` Coins.
-- **Multiplicateur de revenu** après n rebirths : `1,5ⁿ`.
-- **Rebirth Tokens** : +1 par rebirth.
-- **Prestige** p (p = prestiges déjà faits) : exige `8 + 4p` rebirths.
-- **Primal Cores** gagnés : `floor(2 × 1,35^(rebirths − requis))` (≥ 2 au seuil).
+**Rebirth (jalon A, implémenté)** — `ProgressionConfig.Rebirth` :
+- **Seuil** du rebirth n° `n + 1` : `100 000 × 3,2ⁿ` Coins **gagnés pendant le cycle** (le solde ne compte pas).
+- **Multiplicateur de revenu** après `R` rebirths : `M(R) = 1 + 0,35 R + 0,015 R²` (×1,365 ; ×1,76 ; ×2,185 ; … ×6 à R = 10).
+- **Mutation Essence** : `floor(100 × (1 + n)^0,75 × min(gagné / seuil, 4)^0,5)` (100 au premier seuil, 168 au
+  deuxième ; dépasser le seuil rapporte au plus ×2).
+- Réinitialise Coins, graines, sac, améliorations normales, drones, cultures et Coins du cycle ; conserve le reste.
+- Premier rebirth estimé à ≈ 14 min (jeu parfait) / ≈ 22 min (60 %) — à confirmer par le simulateur du jalon C.
+
+**Prestige (jalon B, à concevoir)** — structure testée (`Resets.prestige`), conditions et gain de Primal Cores à
+définir (`docs/PROGRESSION.md` §3).
+
+L'ancien contrat Phase 5 (coût `5·10⁷ × 6ⁿ`, multiplicateur `1,5ⁿ`, Rebirth Tokens, prestige à `8 + 4p` rebirths) est
+**remplacé** par le cahier des charges Phase 3 ; `currencies.rebirthTokens` reste stocké mais n'est plus utilisé.
 
 ## 5. Invariants économiques (tests)
 
 1. Chaque graine débloquée augmente strictement le revenu par case et par seconde.
 2. Les prix de déblocage sont strictement croissants.
 3. Le temps de déblocage (jeu parfait, graine précédente, 9 cases) est strictement croissant et compris entre 30 s et 6 h.
-4. Le bonus de précision ne dépasse jamais 50 % de la valeur de base.
+4. Le bonus de précision ne dépasse jamais 50 % de la valeur de base × `M(R)` (la mutation ne s'y applique pas).
 5. Les Coins ne deviennent jamais négatifs : toute dépense passe par `EconomyService.TrySpendCoins`.
 6. Les multiplicateurs de mutation sont exactement 2, 4, 8, 20, 50, 150 ; les probabilités sont celles du §3 et
    somment à 1 ; E(1) = 1,5051 ∈ [1,4 ; 1,6] (avant Phase 2 : [1,1 ; 1,3]).
-7. La croissance du coût de rebirth (×6) dépasse celle du multiplicateur (×1,5) : chaque rebirth est plus long.
+7. La croissance du seuil de rebirth (×3,2) dépasse celle du multiplicateur (`M(R+1)/M(R)` ≤ ×1,365), testé pour
+   R = 0..60 : chaque rebirth est plus long que le précédent à production égale (×2,34 à ×2,9).
 8. Production hors ligne plafonnée à 7 200 s.
 9. Les drones ne touchent jamais de bonus de précision, ne dépassent jamais la production de la ferme ni la capacité
    du sac, et ne réduisent jamais les **ventes** du joueur (simulation, §7).
