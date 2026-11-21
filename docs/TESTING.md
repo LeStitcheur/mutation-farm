@@ -7,6 +7,10 @@ pwsh scripts/check.ps1        # vérifie (échoue si le formatage est incorrect)
 pwsh scripts/check.ps1 -Fix   # applique StyLua puis vérifie le reste
 ```
 
+La même vérification tourne en **CI** (GitHub Actions, `.github/workflows/check.yml`, runner Windows) sur chaque
+pull request et chaque push sur `main` : installation des outils épinglés (`scripts/setup-tools.ps1`, mise en cache)
+puis `scripts/check.ps1`. Le rapport du simulateur (`… run tests/run.luau report`) n'y est pas exécuté.
+
 | Étape | Outil | Ce qui est garanti |
 |---|---|---|
 | Sourcemap | `rojo sourcemap` | arbre DataModel connu de luau-lsp |
