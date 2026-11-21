@@ -107,7 +107,7 @@ avance la Phase 5). Détail : `docs/PROGRESSION.md`.
 Cahier des charges du 2026-11-21 (« contenu et fidélisation »). Branche empilée sur `phase-3/progression` (PR #1
 non fusionnée).
 
-**Jalon A — Mutadex (implémenté, validation Studio en attente)**
+**Jalon A — Mutadex (implémenté, validé en Studio le 2026-11-21)**
 - [x] Catalogue dérivé (7 plantes × 7 mutations = 49), raretés, multiplicateurs (`MutadexConfig`, `Mutadex`)
 - [x] Découvertes par le serveur dans le mutateur de récolte (joueur et drones), compteurs, première date
 - [x] Paliers 10 / 25 / 50 / 75 / 100 % accordés une seule fois (cosmétiques, places de sac), rattrapés au chargement
@@ -118,10 +118,10 @@ non fusionnée).
 - [x] Tests Lune : 246 (dont `Mutadex.spec` 18) ; simulateur affiné (variabilité, nombres aléatoires communs)
 - [x] Revue de code : contenu retiré conservé en sommeil (au lieu de la quarantaine bornée), panneau redessiné
       seulement si son contenu change, lignes d'information sur une ligne, annonces de rattrapage différées
-- [ ] Validation Studio MCP (`docs/TESTING.md` §2.8) — en attente de la connexion du plugin Rojo
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.8) — 2026-11-21, défaut de pulsation du bouton corrigé
 - [ ] Manuel : persistance réelle, mobile, manette (`docs/TESTING.md` §2.4)
 
-**Jalon B — Familiers (implémenté, validation Studio en attente)**
+**Jalon B — Familiers (implémenté, validé en Studio le 2026-11-21)**
 - [x] 6 espèces originales (croissance, valeur, chance, drones, récolte manuelle, général), raretés, bonus par niveau
 - [x] Œufs en Coins (prairie, cristallin) et gratuits (missions) ; probabilités affichées ; tirage serveur ; aucun
       œuf en Robux ; éclosion atomique, idempotente et **sauvegardée avant confirmation**
@@ -131,10 +131,10 @@ non fusionnée).
 - [x] Modèles stylisés suivant le propriétaire (interpolation locale, animations, rendu mobile économe)
 - [x] Schéma v4 + migration v3 -> v4 ; jamais réinitialisés (rebirth, prestige)
 - [x] Tests Lune : 266 (dont `Pets.spec` 20)
-- [ ] Validation Studio MCP (`docs/TESTING.md` §2.9) — en attente de la connexion du plugin Rojo
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.8) — 2026-11-21
 - [ ] Manuel : persistance réelle, performance mobile, manette (`docs/TESTING.md` §2.4)
 
-**Jalon C — Événements dynamiques (implémenté, validation Studio en attente)**
+**Jalon C — Événements dynamiques (implémenté, validé en Studio le 2026-11-21)**
 - [x] Pluie mutagène (5 min, chance × 3 à la plantation, plafonnée) et Floraison dorée (10 min, +50 % de la valeur
       versés à la récolte, joueur et drones)
 - [x] Calendrier déterministe UTC (tranches de 30 min, tirage contrôlé, rendez-vous 12:00 et 20:00, écart ≥ 5 min,
@@ -142,10 +142,10 @@ non fusionnée).
 - [x] Annonces, bandeau avec compte à rebours, éclairage et particules (rendu local économe)
 - [x] Bonus lus à l'instant de l'action : rien ne persiste après la fin, aucune donnée joueur
 - [x] Tests Lune : 278 (dont `Events.spec` 12)
-- [ ] Validation Studio MCP (`docs/TESTING.md` §2.10) — en attente de la connexion du plugin Rojo
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.8) — 2026-11-21
 - [ ] Manuel : multijoueur et mobile (`docs/TESTING.md` §2.4)
 
-**Jalon D — Missions (implémenté, validation Studio en attente)**
+**Jalon D — Missions (implémenté, validé en Studio le 2026-11-21)**
 - [x] 3 quotidiennes (00:00 UTC) et 2 hebdomadaires (lundi 00:00 UTC), tirées par le serveur (déterministe par
       joueur et période) puis sauvegardées : aucun nouveau tirage en changeant de serveur
 - [x] Catalogue de 11 modèles, éligibilité, difficultés, objectifs, expiration, récupération unique
@@ -153,8 +153,10 @@ non fusionnée).
       décorations (cosmétiques)
 - [x] Progression dans le mutateur de chaque action (récoltes joueur et drones, ventes, éclosions, rebirths)
 - [x] Panneau Missions (onglets, progression, récompenses, temps restant, Récupérer ; J / R3 ; pastille)
-- [x] Schéma v5 + migration v4 -> v5 ; tests Lune : 296 (dont `Quests.spec` 18)
-- [ ] Validation Studio MCP (`docs/TESTING.md` §2.11) — en attente de la connexion du plugin Rojo
+- [x] Schéma v5 + migration v4 -> v5 ; tests Lune : 297 (dont `Quests.spec` 19)
+- [x] Revue de code B–D : récupération refusée si la réserve d'œufs est pleine (aucune perte), boucles serveur
+      protégées, sauvegarde d'éclosion protégée, rendu des familiers des autres joueurs limité à 90 studs
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.8) — 2026-11-21, raccourci R3 corrigé (priorité haute)
 - [ ] Manuel : renouvellement réel à 00:00 UTC, mobile, manette (`docs/TESTING.md` §2.4)
 
 ## Phase 5 — Croissance de la ferme et automatisation (ex-Phase 4, replanifiée)

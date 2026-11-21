@@ -120,6 +120,10 @@ traitement des joueurs). `DataService.Start` est appelé en **dernier** pour que
 L'événement du monde actif n'utilise aucun remote : `ReplicatedStorage.WorldEvent` porte trois attributs écrits par le serveur
 (`EventId`, `StartsAt`, `EndsAt`) ; le client n'en tire que l'affichage (`docs/EVENTS.md`).
 
+Règle 7 (probabilités de mutation côté serveur) : les **poids** et le facteur de la Pluie mutagène restent dans
+`Server/Config/MutationOdds` ; les bonus de chance des améliorations, des familiers et de la Rosée chanceuse sont des
+multiplicateurs publics (affichés au joueur), appliqués aux poids par le serveur et plafonnés par `Util/Bonuses`.
+
 La vente passe par un `ProximityPrompt` serveur (le moteur valide la distance) avec un délai anti-spam.
 L'achat de drones aussi (station de la parcelle, appui de 0,4 s, propriétaire seulement, 2 achats/s) : aucun remote
 d'achat n'existe, le client ne peut fournir ni prix ni quantité.

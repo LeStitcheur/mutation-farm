@@ -89,8 +89,9 @@ function PetService.Hatch(player: Player, eggId: string, expectedHatched: number
 	end
 	-- Résultat sauvegardé AVANT la confirmation (pas de familier « vu » puis perdu sur une panne de serveur).
 	hatching[player] = true
-	local saved = DataService.SaveNow(player)
-	hatching[player] = nil
+	local ok, written = pcall(DataService.SaveNow, player)
+	hatching[player] = nil -- toujours libéré, même si la sauvegarde lève une erreur
+	local saved = ok and written == true
 	if not saved then
 		warn(
 			string.format(

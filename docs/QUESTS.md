@@ -47,7 +47,9 @@
 
 - Coins : multipliés par le multiplicateur de revenu (rebirth × prestige × améliorations × familiers) **au moment
   du tirage** ; ils comptent comme Coins gagnés (cycle de rebirth et de prestige).
-- Œufs : ajoutés à la réserve d'œufs gratuits (`docs/PETS.md`), plafonnée à 99 (excédent signalé).
+- Œufs : ajoutés à la réserve d'œufs gratuits (`docs/PETS.md`), plafonnée à 99 ; si la réserve ne peut pas tout
+  recevoir, la récupération est **refusée sans rien accorder** (`reserve_full`) : le joueur ouvre des œufs puis
+  récupère (aucune récompense perdue, testé).
 - Boosts : prolongés à chaque activation, au plus 3 h restantes ; la chance reste plafonnée à 5 au total, le bonus
   de valeur s'ajoute à celui de la Floraison dorée (versé à la récolte).
 - Décorations : cosmétiques possédés (`cosmetics.owned`) ; leur placement sur la parcelle viendra en Phase 5.
@@ -76,7 +78,8 @@
 - Onglets Quotidiennes / Hebdomadaires, temps restant avant le renouvellement (horloge serveur), boosts actifs avec
   leur temps restant ; une ligne par mission : difficulté, objectif, barre de progression, récompenses, bouton
   Récupérer (Récupérée / En cours sinon).
-- Clavier (J), tactile (boutons), manette (R3 ; sélection directe du bouton Récupérer quand une récompense attend ;
+- Clavier (J), tactile (boutons), manette (R3, prioritaire sur le zoom caméra par défaut de Roblox ; sélection directe du
+  bouton Récupérer quand une récompense attend ;
   B ferme). Un seul panneau à la fois (`PanelHub`), chat masqué.
 
 ## 6. Persistance (schéma v5)
@@ -91,3 +94,6 @@
 - Pas de relance (reroll) de mission ni de série de jours consécutifs.
 - Pas de missions liées aux événements (une Floraison peut ne pas avoir lieu pendant la session du joueur).
 - Les décorations ne se posent pas encore (Phase 5).
+- Après un rebirth ou un prestige, une mission « Récolte N plantes : *plante* » ou « Laisse tes drones récolter… »
+  tirée avant la remise à zéro reste valable mais demande de redébloquer la graine ou de racheter un drone ; elle
+  n'est pas tirée à nouveau (choix : pas de relance gratuite par rebirth).

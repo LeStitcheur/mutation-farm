@@ -33,6 +33,7 @@ local QuestService = {}
 local CLAIM_MESSAGES: { [string]: string } = {
 	expired = "Cette mission a expiré : de nouvelles missions sont disponibles.",
 	not_completed = "Mission pas encore terminée.",
+	reserve_full = "Réserve d'Œufs des missions pleine : ouvre des œufs, puis récupère cette récompense.",
 }
 
 local function serverNow(): number
@@ -87,8 +88,8 @@ function QuestService.Claim(player: Player, missionId: string): (boolean, string
 		"success",
 		string.format("Récompense récupérée : %s", Quests.rewardText(result.mission, Format.bigNum))
 	)
-	if result.eggsOverflow > 0 then
-		Notifier.send(player, "info", "Réserve d'œufs pleine : ouvre des œufs pour faire de la place.")
+	if result.eggsOverflow > 0 then -- garde-fou : la récupération est refusée avant d'en arriver là
+		warn(string.format("[QuestService] %d œuf(s) non ajoutés pour %d", result.eggsOverflow, player.UserId))
 	end
 	return true, nil
 end
@@ -127,7 +128,16 @@ function QuestService.Start()
 		while true do
 			task.wait(QuestConfig.RefreshInterval)
 			for _, player in Players:GetPlayers() do
-				QuestService.Refresh(player, true)
+				-- Une donnée inattendue chez un joueur ne doit pas arrêter le renouvellement pour tous les autres.
+				xpcall(QuestService.Refresh, function(err: any)
+					warn(
+						string.format(
+							"[QuestService] Renouvellement en échec pour %d : %s",
+							player.UserId,
+							tostring(err)
+						)
+					)
+				end, player, true)
 			end
 		end
 	end)

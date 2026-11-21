@@ -88,7 +88,8 @@ Ordre de grandeur : 5 645 récoltes pour le niveau maximum, soit quelques heures
   autour du joueur (gauche, droite, derrière) ; sautillement en marche, flottement et battement d'ailes pour les
   volants, rotor pour le Scarabée-drone ; retour immédiat après une téléportation (> 40 studs).
 - Mobile d'entrée de gamme : pièces ancrées sans collision, requête ni ombre ; déplacement groupé
-  (`BulkMoveTo`) à 30 Hz ; familiers à plus de 160 studs de la caméra retirés du rendu ; lumière uniquement pour
+  (`BulkMoveTo`) à 30 Hz ; familiers retirés du rendu au-delà de 160 studs de la caméra (90 pour les autres joueurs) ;
+  lumière uniquement pour
   les familiers lumineux du joueur local.
 
 ## 8. Persistance (schéma v4)

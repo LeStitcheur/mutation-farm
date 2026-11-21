@@ -277,6 +277,26 @@ return function()
 			expect(loaded.quests.daily.missions[1].progress).to.equal(0)
 		end)
 
+		it(
+			"réserve d'œufs pleine : récupération refusée sans rien accorder, possible après avoir ouvert des œufs",
+			function()
+				local data = DataSchema.template(0)
+				local mission = withMission(data, "sell", 1)
+				Quests.record(data, "sell", 1, NOW)
+				Pets.addFreeEggs(data, "mission", 99)
+				local outcome, failure = Quests.claim(data, mission.id, NOW)
+				expect(outcome).to.equal(nil)
+				expect(failure).to.equal("reserve_full")
+				expect(mission.claimed).to.equal(false)
+				expect(BigNum.isZero(data.currencies.coins)).to.equal(true)
+				data.pets.freeEggs.mission = 98 -- un œuf ouvert
+				local claimed = assert(Quests.claim(data, mission.id, NOW), "récupération refusée")
+				expect(claimed.eggs).to.equal(1)
+				expect(claimed.eggsOverflow).to.equal(0)
+				expect(Pets.freeEggs(data, "mission")).to.equal(99)
+			end
+		)
+
 		it("concurrence : deux demandes de récupération successives → une seule récompense", function()
 			local data = DataSchema.template(0)
 			local mission = withMission(data, "sell", 1)

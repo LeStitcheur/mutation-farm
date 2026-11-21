@@ -118,7 +118,10 @@ end
 function EventService.Start()
 	task.spawn(function()
 		while true do
-			refresh()
+			-- Une erreur ponctuelle ne doit jamais arrêter la publication des événements pour tout le serveur.
+			xpcall(refresh, function(err: any)
+				warn("[EventService] Rafraîchissement en échec : " .. tostring(err))
+			end)
 			task.wait(CHECK_INTERVAL)
 		end
 	end)

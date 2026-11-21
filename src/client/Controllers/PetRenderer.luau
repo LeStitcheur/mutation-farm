@@ -18,7 +18,8 @@ local Pets = require(Shared.Util.Pets)
 local ATTRIBUTE = "Pets"
 local UPDATE_INTERVAL = 1 / 30
 local FOLLOW_SPEED = 7 -- rapidité du rattrapage (1 − e^(−v·dt))
-local CULL_DISTANCE = 160 -- au-delà (studs, depuis la caméra), les familiers d'un joueur sont masqués
+local CULL_DISTANCE = 160 -- au-delà (studs, depuis la caméra), les familiers du joueur local sont masqués
+local CULL_DISTANCE_OTHERS = 90 -- plus strict pour les autres joueurs (serveurs pleins, mobiles modestes)
 local GROUND_OFFSET = 2.6 -- hauteur approximative du HumanoidRootPart au-dessus du sol
 local SLOT_OFFSETS = { Vector3.new(-3.2, 0, 2.4), Vector3.new(3.2, 0, 2.4), Vector3.new(0, 0, 4.2) }
 
@@ -282,7 +283,8 @@ local function step(dt: number, clock: number)
 		local character = owner.player.Character
 		local found = if character then character:FindFirstChild("HumanoidRootPart") else nil
 		local root = if found and found:IsA("BasePart") then found else nil
-		local visible = root ~= nil and (root.Position - cameraPosition).Magnitude <= CULL_DISTANCE
+		local limit = if owner.player == Players.LocalPlayer then CULL_DISTANCE else CULL_DISTANCE_OTHERS
+		local visible = root ~= nil and (root.Position - cameraPosition).Magnitude <= limit
 		if visible ~= owner.shown then
 			owner.shown = visible
 			owner.folder.Parent = if visible then getContainer() else nil

@@ -280,6 +280,9 @@ function Pets.hatch(
 	end
 	local egg = PetConfig.EggById[eggId]
 	local pets = data.pets
+	-- Identifiant vérifié AVANT tout paiement (un mutateur n'a pas de retour arrière).
+	local instanceId = "p" .. pets.nextSerial
+	assert(pets.instances[instanceId] == nil, "Pets.hatch : identifiant d'instance déjà utilisé " .. instanceId)
 	local price = BigNum.zero()
 	if useFree then
 		pets.freeEggs[eggId] = Pets.freeEggs(data, eggId) - 1
@@ -288,8 +291,6 @@ function Pets.hatch(
 		data.currencies.coins = BigNum.sub(data.currencies.coins, price)
 	end
 	local petId = Pets.draw(egg, r)
-	local instanceId = "p" .. pets.nextSerial
-	assert(pets.instances[instanceId] == nil, "Pets.hatch : identifiant d'instance déjà utilisé " .. instanceId)
 	pets.nextSerial += 1
 	pets.hatched = Pets.hatchedCount(data) + 1
 	pets.instances[instanceId] = { petId = petId, level = 1, xp = 0, obtainedAt = now }

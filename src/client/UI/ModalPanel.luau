@@ -204,12 +204,15 @@ function ModalPanel.new(options: Options): Modal
 	closeButton.Activated:Connect(function()
 		setOpen(false)
 	end)
-	ContextActionService:BindAction(toggleAction, function(_, inputState: Enum.UserInputState)
+	-- Priorité haute : les scripts par défaut de Roblox lient certains boutons de manette à la même priorité que
+	-- BindAction (ex. R3 = zoom de la caméra, constaté en Studio) et les recapturent à chaque apparition du
+	-- personnage. Les raccourcis des panneaux passent donc devant, de façon déterministe.
+	ContextActionService:BindActionAtPriority(toggleAction, function(_, inputState: Enum.UserInputState)
 		if inputState == Enum.UserInputState.Begin then
 			setOpen(not open)
 		end
 		return Enum.ContextActionResult.Sink
-	end, false, table.unpack(options.keys))
+	end, false, Enum.ContextActionPriority.High.Value, table.unpack(options.keys))
 	updateInputHints()
 	UserInputService.LastInputTypeChanged:Connect(updateInputHints)
 	local function watchCamera()

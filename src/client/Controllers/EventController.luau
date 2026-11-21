@@ -146,7 +146,10 @@ local function step()
 	local label = countdown
 	if folder and label and activeId ~= "" then
 		local endsAt = folder:GetAttribute("EndsAt")
-		label.Text = if type(endsAt) == "number" then formatRemaining(endsAt - serverNow()) else ""
+		local text = if type(endsAt) == "number" then formatRemaining(endsAt - serverNow()) else ""
+		if label.Text ~= text then
+			label.Text = text -- une écriture par seconde au plus, pas 20
+		end
 	end
 	local part = anchor
 	local camera = Workspace.CurrentCamera

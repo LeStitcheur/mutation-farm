@@ -8,6 +8,7 @@
 
 local Types = require(script.Parent.Parent.Types)
 local QuestConfig = require(script.Parent.Parent.Config.QuestConfig)
+local PetConfig = require(script.Parent.Parent.Config.PetConfig)
 local MutationConfig = require(script.Parent.Parent.Config.MutationConfig)
 local PlantConfig = require(script.Parent.Parent.Config.PlantConfig)
 local BigNum = require(script.Parent.BigNum)
@@ -23,13 +24,13 @@ type Kind = QuestConfig.Kind
 type Difficulty = QuestConfig.Difficulty
 type TemplateDef = QuestConfig.TemplateDef
 
-export type ClaimFailure = "unknown_mission" | "expired" | "not_completed" | "already_claimed"
+export type ClaimFailure = "unknown_mission" | "expired" | "not_completed" | "already_claimed" | "reserve_full"
 
 export type ClaimOutcome = {
 	mission: Mission,
 	coins: Types.BigNum,
 	eggs: number, -- œufs réellement ajoutés à la réserve
-	eggsOverflow: number, -- œufs non ajoutés (réserve pleine) : signalés au joueur
+	eggsOverflow: number, -- toujours 0 (récupération refusée si la réserve ne peut pas tout recevoir) ; garde-fou
 	boost: string?,
 	decoration: string?,
 }
@@ -308,6 +309,12 @@ function Quests.claim(data: PlayerData, missionId: string, now: number): (ClaimO
 	end
 	if not Quests.isComplete(mission) then
 		return nil, "not_completed"
+	end
+	-- Jamais de récompense perdue : si la réserve d'œufs ne peut pas tout recevoir, la récupération est refusée
+	-- (rien n'est accordé) ; le joueur ouvre des œufs puis récupère.
+	local eggsReward = mission.rewards.eggs
+	if eggsReward > 0 and Pets.freeEggs(data, QuestConfig.MissionEgg) + eggsReward > PetConfig.MaxFreeEggs then
+		return nil, "reserve_full"
 	end
 	mission.claimed = true
 	data.quests.claimed += 1
