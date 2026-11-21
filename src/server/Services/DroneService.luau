@@ -122,7 +122,7 @@ local function layoutDrones(player: Player, runtime: Runtime)
 			def = def,
 			home = home,
 			anchor = anchor,
-			nextAt = now + def.interval * index / #fleet,
+			nextAt = now + DroneLogic.interval(def, data) * index / #fleet,
 			status = "idle",
 		})
 	end
@@ -253,7 +253,9 @@ local function tick()
 			if now < drone.nextAt then
 				continue
 			end
-			drone.nextAt = now + drone.def.interval
+			-- Planifié depuis l'échéance précédente (et non `now`) : un intervalle de 3,8 s ne s'arrondit pas au pas de
+			-- la boucle (0,25 s → 4 s). Améliorations d'efficacité ; délai de grâce inchangé.
+			drone.nextAt = math.max(drone.nextAt + DroneLogic.interval(drone.def, data), now)
 			local status: DroneStatus = if Inventory.isFull(data.bag.items, Economy.bagCapacity(data))
 				then "bag_full"
 				else "idle"
