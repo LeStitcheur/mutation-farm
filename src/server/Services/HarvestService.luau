@@ -23,6 +23,7 @@ local Signal = require(Shared.Util.Signal)
 local Net = require(Shared.Net)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
+local EventService = require(script.Parent.EventService)
 local FarmService = require(script.Parent.FarmService)
 local MutadexService = require(script.Parent.MutadexService)
 local Notifier = require(script.Parent.Parent.Infra.Notifier)
@@ -104,19 +105,21 @@ local function harvest(
 		return false, "bag_full"
 	end
 
-	-- Revalidation + application atomiques (aucun yield entre les deux).
+	-- Revalidation + application atomiques (aucun yield entre les deux). Floraison dorée lue à cet instant précis.
+	local eventValueBonus = EventService.ValueBonus()
 	local outcome: HarvestRules.Outcome? = nil
 	DataService.Update(player, function(d)
 		if HarvestRules.check(d, tileId, now) then
-			outcome = HarvestRules.apply(d, tileId, now, source)
+			outcome = HarvestRules.apply(d, tileId, now, source, eventValueBonus)
 		end
 	end)
 	local result = outcome
 	if not result then
 		return false, "not_ripe"
 	end
-	if not BigNum.isZero(result.bonus) then
-		EconomyService.AddCoins(player, result.bonus)
+	local credit = BigNum.add(result.bonus, result.eventBonus)
+	if not BigNum.isZero(credit) then
+		EconomyService.AddCoins(player, credit)
 	end
 	FarmService.PlantTile(player, tileId)
 
@@ -128,6 +131,7 @@ local function harvest(
 		bonus = result.bonus,
 		source = source,
 		discovered = result.discovered,
+		eventBonus = result.eventBonus,
 	}
 	Net.event(Net.Events.HarvestResult):FireClient(player, payload)
 	MutadexService.OnHarvest(player, result.plantId, result.mutation, result.discovered, result.milestones)

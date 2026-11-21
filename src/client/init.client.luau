@@ -17,6 +17,7 @@ local PrestigeController = require(Controllers.PrestigeController)
 local UpgradeController = require(Controllers.UpgradeController)
 local MutadexController = require(Controllers.MutadexController)
 local PetController = require(Controllers.PetController)
+local EventController = require(Controllers.EventController)
 local PlantRenderer = require(Controllers.PlantRenderer)
 local PetRenderer = require(Controllers.PetRenderer)
 local HarvestController = require(Controllers.HarvestController)
@@ -35,6 +36,7 @@ local ordered: { Controller } = {
 	UpgradeController,
 	MutadexController,
 	PetController,
+	EventController,
 	PlantRenderer,
 	HarvestController,
 	DroneRenderer,

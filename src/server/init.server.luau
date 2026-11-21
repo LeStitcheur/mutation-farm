@@ -12,6 +12,7 @@ local DataService = require(Services.DataService)
 local EconomyService = require(Services.EconomyService)
 local PlantService = require(Services.PlantService)
 local MutationService = require(Services.MutationService)
+local EventService = require(Services.EventService)
 local FarmService = require(Services.FarmService)
 local MutadexService = require(Services.MutadexService)
 local HarvestService = require(Services.HarvestService)
@@ -36,6 +37,7 @@ local ordered: { { name: string, service: Service } } = {
 	{ name = "EconomyService", service = EconomyService },
 	{ name = "PlantService", service = PlantService },
 	{ name = "MutationService", service = MutationService },
+	{ name = "EventService", service = EventService }, -- avant Farm/Harvest : bonus d'événement lus à l'instant
 	{ name = "FarmService", service = FarmService },
 	{ name = "MutadexService", service = MutadexService },
 	{ name = "HarvestService", service = HarvestService },

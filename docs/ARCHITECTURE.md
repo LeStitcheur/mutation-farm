@@ -22,11 +22,11 @@ src/
     Types.luau            Contrats de données (PlayerData, TileState, ClientState…)
     Net.luau              Noms et accès aux RemoteEvents
     Config/               GameConfig, PlantConfig, MutationConfig, DroneConfig, ProgressionConfig, UpgradeConfig,
-                          MutadexConfig, PetConfig
+                          MutadexConfig, PetConfig, EventConfig
                           (gelées)
     Util/                 Logique pure : BigNum, Format, Growth, Economy, Inventory, MutationRoll,
                           DataSchema, Resets, FarmLayout, ClientView, Signal, Deep, SessionLock, SlotAllocator,
-                          HarvestRules, DroneLogic, ProgressionMath, Upgrades, Mutadex, Pets,
+                          HarvestRules, DroneLogic, ProgressionMath, Upgrades, Mutadex, Pets, WorldEvents,
                           Bonuses (agrégation améliorations × familiers sous les plafonds globaux)
   server/   -> ServerScriptService.Server
     init.server.luau      Bootstrap des services
@@ -34,11 +34,13 @@ src/
     Infra/                DataStoreAdapter, RateLimiter, Notifier
     Services/             DataService, EconomyService, PlantService, MutationService, FarmService, HarvestService,
                           DroneService, ProgressionService, RebirthService, PrestigeService,
-                          UpgradeService, MutadexService, PetService, DevService (Studio uniquement), SyncService
+                          UpgradeService, MutadexService, PetService, EventService, DevService (Studio uniquement),
+                          SyncService
   client/   -> StarterPlayer.StarterPlayerScripts.Client
     init.client.luau      Bootstrap des contrôleurs
     Controllers/          StateController, HudController, RebirthController, PrestigeController, UpgradeController,
-                          MutadexController, PetController, PlantRenderer, HarvestController, DroneRenderer,
+                          MutadexController, PetController, EventController, PlantRenderer, HarvestController,
+                          DroneRenderer,
                           PetRenderer (familiers de tous les joueurs, rendu local)
                           (menu latéral : grille de 2 colonnes, boutons ajoutés par les contrôleurs)
     UI/                   Theme, Builder, PanelHub (un panneau à la fois, chat masqué),
@@ -83,6 +85,7 @@ dépend de ces trois derniers.)
 | **PrestigeService** | Prestige (Phase 3, jalon B) : remote, débit, règle `Resets.prestige` exécutée par `ProgressionService.Run` | `Prestige` |
 | **UpgradeService** | Achats d'améliorations (Phase 3, jalon C) : remote validé, débit, refus pendant une transition, `Upgrades.purchase` dans un mutateur, flotte recalculée pour les drones offerts | `Purchase` |
 | **PetService** | Familiers (Phase 4, jalon B) : éclosion (aléa serveur, `Pets.hatch` dans un mutateur, **sauvegarde avant confirmation**), équiper / retirer / relâcher, annonces de niveau (signal `HarvestService.Harvested`), attribut `Pets` du joueur pour le rendu | `Hatch`, `Equip`, `Unequip`, `Release`, `OnLevelUps`, `GrantFreeEggs`, `Refresh` |
+| **EventService** | Événements du monde (Phase 4, jalon C) : calendrier déterministe (`WorldEvents`, horloge serveur, identique sur tous les serveurs), état publié dans `ReplicatedStorage.WorldEvent` (attributs `EventId`, `StartsAt`, `EndsAt`, répliqués aux arrivées tardives), annonces de début et de fin ; bonus lus à l'instant de l'action (chance à la plantation, valeur à la récolte) | `Current`, `LuckFactor`, `ValueBonus`, `Force`, `ClearForced` (Studio) |
 | **DevService** | Outils de test **Studio uniquement** (`RunService:IsStudio()`) : `ServerStorage.MutationFarmDev` (BindableFunction, inaccessible aux clients) — `grantEarned`, `snapshot` | — |
 | *AutomationService* | Phase 4 (drones collecteurs, vente auto, hors ligne) | |
 | *PurchaseService* | Phase 6 | |
@@ -105,9 +108,12 @@ traitement des joueurs). `DataService.Start` est appelé en **dernier** pour que
 | `PetEquip` / `PetUnequip` / `PetRelease` | C→S | `instanceId: string` | chaîne 1..32, 5 req/s, aucune transition ; instance existante et active (équiper : < 3 équipés ; relâcher : non équipée) |
 | `StateSync` | S→C | `ClientState` | — |
 | `PetHatched` | S→C | `{ eggId, instanceId, petId, saved }` — **après** la tentative de sauvegarde | — |
-| `HarvestResult` | S→C | `{ tileId, plantId, mutation, tier, bonus, source, discovered }` (`source` : `"player"` / `"drone"` ; `discovered` : première récolte de la combinaison au Mutadex) | — |
+| `HarvestResult` | S→C | `{ tileId, plantId, mutation, tier, bonus, source, discovered, eventBonus }` (`source` : `"player"` / `"drone"` ; `discovered` : première récolte de la combinaison au Mutadex ; `eventBonus` : part de valeur de la Floraison dorée versée à la récolte) | — |
 | `Notify` | S→C | `{ kind, text }` | — |
 | `LoadStatus` | S→C | `{ status, message }` | — |
+
+L'événement du monde actif n'utilise aucun remote : `ReplicatedStorage.WorldEvent` porte trois attributs écrits par le serveur
+(`EventId`, `StartsAt`, `EndsAt`) ; le client n'en tire que l'affichage (`docs/EVENTS.md`).
 
 La vente passe par un `ProximityPrompt` serveur (le moteur valide la distance) avec un délai anti-spam.
 L'achat de drones aussi (station de la parcelle, appui de 0,4 s, propriétaire seulement, 2 achats/s) : aucun remote

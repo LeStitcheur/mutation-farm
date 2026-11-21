@@ -8,6 +8,8 @@
 --                                           Mutadex par le vrai chemin de récolte)
 --   Invoke("grantEggs", userId, eggId, amount) : ajoute des œufs gratuits (tests des familiers, comme une
 --                                           récompense de mission)
+--   Invoke("startEvent", userId, eventId, duration?) : force un événement du monde maintenant (tests du jalon C)
+--   Invoke("stopEvent", userId)           : arrête l'événement forcé
 -- API : aucune.
 
 local HttpService = game:GetService("HttpService")
@@ -20,6 +22,7 @@ local MutationConfig = require(ReplicatedStorage.Shared.Config.MutationConfig)
 local BigNum = require(ReplicatedStorage.Shared.Util.BigNum)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
+local EventService = require(script.Parent.EventService)
 local PetService = require(script.Parent.PetService)
 
 local MAX_GRANT = 1e15
@@ -61,6 +64,15 @@ local function invoke(command: unknown, userId: unknown, amount: unknown, extra:
 			return false
 		end
 		return PetService.GrantFreeEggs(player, amount, extra)
+	elseif command == "startEvent" then
+		if type(amount) ~= "string" then
+			return false
+		end
+		local duration = if type(extra) == "number" and extra == extra then extra else nil
+		return EventService.Force(amount, duration)
+	elseif command == "stopEvent" then
+		EventService.ClearForced()
+		return true
 	end
 	return nil
 end

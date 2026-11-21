@@ -135,6 +135,16 @@ Simulations Lune également (pas de validation du vrai DataStore).
 - Concurrence côté serveur : un seul mutateur par éclosion (`Pets.hatch`), drapeau « éclosion en sauvegarde » et
   débit 1 / 3 s dans `PetService` (validés en Studio, `docs/TESTING.md` §2.9).
 
+### Ce qui est couvert hors Studio pour les événements (Phase 4, jalon C)
+- `Events.spec` (12 tests) : calendrier **déterministe** (même tranche → même événement, sur tous les serveurs) ;
+  **tirage contrôlé** (≈ 50 % des tranches, Pluie 60 % / Floraison 40 % sur 20 000 tranches) ; **rendez-vous fixes**
+  (12:00 et 20:00 UTC) ; **un seul événement à la fois** et **écart minimal** de 5 min (10 000 tranches) ;
+  **déclenchement** forcé et **expiration** (aucun bonus résiduel, durée forcée plafonnée) ; **arrivée tardive**
+  (début, milieu, fin → même fenêtre et même fin) ; forcé prioritaire sur le planifié ; **Pluie** : chance × 3 plafonnée
+  (P(normale) ≥ 46 %), mutations au moins doublées ; **Floraison** : +50 % de la valeur versé à la récolte pour le
+  **joueur et les drones**, une seule fois, sac inchangé à la vente ; **plusieurs joueurs** ; **rebirth et prestige**
+  pendant un événement ; **sauvegarde** inchangée ; **aucun cumul**.
+
 ### Ce qui n'est PAS couvert automatiquement
 Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
 → checklist ci-dessous, déroulée via Studio MCP (§3) ; ce qui exige un humain reste marqué comme tel.
@@ -270,6 +280,7 @@ fenêtres de test sont visibles par le MCP). Ne cocher qu'après exécution rée
 | **Améliorations : manette** (Phase 3) | Manette branchée | L2 ouvre le panneau, onglet sélectionné ; croix pour passer d'un onglet aux lignes, A achète (niveau + 1, solde mis à jour), B ferme |
 | **Améliorations : persistance réelle** (Phase 3) | Comme « Sauvegarde réelle » | Niveaux achetés restaurés après Stop / Play ; améliorations Essence perdues et permanentes conservées après un prestige réel |
 | **Mutadex : persistance réelle** (Phase 4) | Comme « Sauvegarde réelle » | Découvertes, compteurs, dates et paliers restaurés après Stop / Play et après un changement de serveur ; ancienne sauvegarde v2 migrée sans perte |
+| **Événements : multijoueur et mobile** (Phase 4) | Serveur local à 2 joueurs ; appareil mobile | Même événement, même compte à rebours pour les deux ; un joueur qui rejoint pendant l'événement voit le bandeau et les effets ; pluie et paillettes fluides sur mobile ; éclairage restauré à la fin |
 | **Familiers : persistance réelle** (Phase 4) | Comme « Sauvegarde réelle » | Éclosion puis arrêt brutal du serveur : le familier est présent au retour (sauvegarde avant confirmation) ; équipement, niveaux et œufs gratuits restaurés après changement de serveur |
 | **Familiers : performance mobile** (Phase 4) | Appareil d'entrée de gamme, 3 familiers équipés, plusieurs joueurs | Images par seconde stables, familiers qui suivent sans saccade, aucune erreur ; panneau Familiers lisible (*Test › Device*) ; manette : L3 ouvre, B ferme |
 | **Mutadex : mobile et manette** (Phase 4) | *Test › Device* ; manette branchée | Menu en grille lisible sans chevauchement avec le chat ; panneau ajusté, cartes défilables au doigt ; R2 ouvre, croix pour parcourir filtres et cartes (défilement automatique), B ferme |

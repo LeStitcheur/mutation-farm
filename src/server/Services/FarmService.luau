@@ -17,6 +17,7 @@ local SlotAllocator = require(Shared.Util.SlotAllocator)
 local Bonuses = require(Shared.Util.Bonuses)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
+local EventService = require(script.Parent.EventService)
 local MutationService = require(script.Parent.MutationService)
 local PlantService = require(script.Parent.PlantService)
 
@@ -302,7 +303,8 @@ function FarmService.PlantTile(player: Player, tileId: string): boolean
 		return false
 	end
 	local plantId = PlantService.GetSelectedSeed(data)
-	local mutation = MutationService.Roll(Bonuses.luck(data))
+	-- Chance : améliorations + familiers, × Pluie mutagène si elle est active À LA PLANTATION (plafonnée).
+	local mutation = MutationService.Roll(Bonuses.luck(data, EventService.LuckFactor()))
 	local tile: TileState = {
 		plantId = plantId,
 		plantedAt = Workspace:GetServerTimeNow(),

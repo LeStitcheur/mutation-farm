@@ -134,7 +134,18 @@ non fusionnée).
 - [ ] Validation Studio MCP (`docs/TESTING.md` §2.9) — en attente de la connexion du plugin Rojo
 - [ ] Manuel : persistance réelle, performance mobile, manette (`docs/TESTING.md` §2.4)
 
-**Jalon C — Événements dynamiques** · **Jalon D — Missions** : à venir.
+**Jalon C — Événements dynamiques (implémenté, validation Studio en attente)**
+- [x] Pluie mutagène (5 min, chance × 3 à la plantation, plafonnée) et Floraison dorée (10 min, +50 % de la valeur
+      versés à la récolte, joueur et drones)
+- [x] Calendrier déterministe UTC (tranches de 30 min, tirage contrôlé, rendez-vous 12:00 et 20:00, écart ≥ 5 min,
+      un seul à la fois) : identique sur tous les serveurs sans MessagingService ; arrivées tardives servies
+- [x] Annonces, bandeau avec compte à rebours, éclairage et particules (rendu local économe)
+- [x] Bonus lus à l'instant de l'action : rien ne persiste après la fin, aucune donnée joueur
+- [x] Tests Lune : 278 (dont `Events.spec` 12)
+- [ ] Validation Studio MCP (`docs/TESTING.md` §2.10) — en attente de la connexion du plugin Rojo
+- [ ] Manuel : multijoueur et mobile (`docs/TESTING.md` §2.4)
+
+**Jalon D — Missions** : à venir.
 
 ## Phase 5 — Croissance de la ferme et automatisation (ex-Phase 4, replanifiée)
 - [ ] Améliorations normales (vitesse, valeur, sac) — UpgradeService + UI

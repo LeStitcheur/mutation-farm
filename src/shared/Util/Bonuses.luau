@@ -26,9 +26,11 @@ function Bonuses.droneIntervalFactor(data: PlayerData): number
 	)
 end
 
--- Chance de mutation totale (1 = base), arrondie au centième (cache des poids côté serveur), ≤ MaxTotalLuck.
-function Bonuses.luck(data: PlayerData): number
-	local luck = Upgrades.luck(data) + Pets.luckBonus(data)
+-- Chance de mutation totale (1 = base) : (améliorations + familiers) × facteur d'événement (Pluie mutagène, 1 par
+-- défaut), arrondie au centième (cache des poids côté serveur), jamais au-delà de MaxTotalLuck.
+function Bonuses.luck(data: PlayerData, eventFactor: number?): number
+	local factor = if eventFactor and eventFactor == eventFactor and eventFactor >= 1 then eventFactor else 1
+	local luck = (Upgrades.luck(data) + Pets.luckBonus(data)) * factor
 	return math.min(UpgradeConfig.Caps.MaxTotalLuck, math.floor(luck * 100 + 0.5) / 100)
 end
 

@@ -30,6 +30,7 @@ export type Outcome = {
 	discovered: boolean, -- première récolte de cette combinaison (Mutadex)
 	milestones: { MutadexConfig.MilestoneDef }, -- paliers du Mutadex accordés par cette découverte
 	petLevelUps: { Pets.LevelUp }, -- familiers équipés passés au niveau supérieur (XP de cette récolte)
+	eventBonus: Types.BigNum, -- Floraison dorée : part de la valeur versée À LA RÉCOLTE (0 hors événement)
 }
 
 local HarvestRules = {}
@@ -54,7 +55,16 @@ end
 
 -- Applique une récolte DÉJÀ validée par `check` : objet (avec sa mutation) dans le sac, statistiques, case vidée.
 -- Les drones ne reçoivent jamais de bonus de précision (palier "normal").
-function HarvestRules.apply(data: PlayerData, tileId: string, now: number, source: Types.HarvestSource): Outcome
+-- `eventValueBonus` (Floraison dorée, lu par le serveur à l'horloge serveur au moment de la récolte) : part de la
+-- valeur de l'objet versée immédiatement, joueur ou drone, une seule fois par récolte ; l'objet du sac garde sa
+-- valeur normale à la vente (aucun intérêt à garder son sac pour un événement).
+function HarvestRules.apply(
+	data: PlayerData,
+	tileId: string,
+	now: number,
+	source: Types.HarvestSource,
+	eventValueBonus: number?
+): Outcome
 	local tile = data.farm.tiles[tileId]
 	assert(tile, "HarvestRules.apply : case vide " .. tileId)
 	local mutation = tile.mutation or MutationConfig.NORMAL
@@ -80,6 +90,11 @@ function HarvestRules.apply(data: PlayerData, tileId: string, now: number, sourc
 	local discovered = Mutadex.record(data, tile.plantId, mutation, now)
 	local milestones = if discovered then Mutadex.claimMilestones(data, now) else {}
 	local petLevelUps = Pets.grantXp(data, Pets.harvestXp(source, tier))
+	local eventBonus = BigNum.zero()
+	local value = Economy.itemValue(tile.plantId, mutation)
+	if eventValueBonus and eventValueBonus > 0 and value then
+		eventBonus = BigNum.mulNumber(value, eventValueBonus * ProgressionMath.incomeMultiplier(data))
+	end
 	return {
 		plantId = tile.plantId,
 		mutation = mutation,
@@ -89,6 +104,7 @@ function HarvestRules.apply(data: PlayerData, tileId: string, now: number, sourc
 		discovered = discovered,
 		milestones = milestones,
 		petLevelUps = petLevelUps,
+		eventBonus = eventBonus,
 	}
 end
 

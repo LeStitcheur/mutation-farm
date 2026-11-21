@@ -320,3 +320,17 @@ Constats :
   de vente d'une culture) : E(1) = 1,505 ; E(2,5) = 1,98 ; E(3,1) ≈ 2,12 (améliorations + 2 Phalènes niveau 15) ;
   E(5) ≈ 2,44 ; P(normale) ≥ 46 % au plafond (testé).
 - Non simulé : `tests/sim` ne modélise ni familiers ni événements ; les invariants restent ceux du §5.
+
+## 10. Événements du monde (Phase 4, jalon C ; détail : `docs/EVENTS.md`)
+
+- **Fréquence** : ≈ 1 événement par heure (tranches de 30 min, 50 % tirées) + 2 rendez-vous quotidiens (Floraison à
+  12:00 et 20:00 UTC) ; 5 min au minimum entre deux événements, jamais deux à la fois.
+- **Pluie mutagène** (5 min) : chance × 3 à la plantation, plafonnée à 5 au total. Pour un joueur sans
+  amélioration, l'espérance du multiplicateur de vente d'une culture semée sous la pluie passe de 1,505 à
+  ≈ 2,10 (+39 %), et les mutations rares (Astrale, Divine) deviennent ≈ 2,2 fois plus probables ; l'effet n'apparaît
+  qu'à la récolte de ces cultures (après la pluie pour les plantes lentes).
+- **Floraison dorée** (10 min) : +50 % de la valeur de chaque récolte, versés à la récolte (× multiplicateur de
+  revenu). Pour un joueur actif, c'est ≈ +50 % de revenu pendant 10 min ; sur une journée (2 rendez-vous et
+  ≈ 9 Floraisons tirées parmi ≈ 23 événements, soit ≈ 1 h 50 de Floraison), le gain moyen est ≈ +4 % pour qui
+  joue en continu.
+- Non simulé (`tests/sim`) : les ordres de grandeur ci-dessus sont calculés à partir des formules, pas mesurés.

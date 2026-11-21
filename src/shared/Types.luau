@@ -154,6 +154,7 @@ export type HarvestResult = {
 	bonus: BigNum,
 	source: HarvestSource,
 	discovered: boolean, -- première récolte de cette combinaison (Mutadex)
+	eventBonus: BigNum, -- Floraison dorée : Coins versés à la récolte (0 hors événement)
 }
 
 export type NotifyKind = "info" | "success" | "error"
