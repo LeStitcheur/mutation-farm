@@ -10,6 +10,7 @@ local MutationConfig = require(script.Parent.Parent.Config.MutationConfig)
 local UpgradeConfig = require(script.Parent.Parent.Config.UpgradeConfig)
 local MutadexConfig = require(script.Parent.Parent.Config.MutadexConfig)
 local PetConfig = require(script.Parent.Parent.Config.PetConfig)
+local QuestConfig = require(script.Parent.Parent.Config.QuestConfig)
 local BigNum = require(script.Parent.BigNum)
 local Deep = require(script.Parent.Deep)
 local Economy = require(script.Parent.Economy)
@@ -19,7 +20,7 @@ local FarmLayout = require(script.Parent.FarmLayout)
 type PlayerData = Types.PlayerData
 type Migration = (any) -> any
 
-local VERSION = 4
+local VERSION = 5
 local MAX_DEPTH = 16
 local MAX_LEGACY_PETS = 1000 -- v1–v3 : au-delà, un compteur d'exemplaires est jugé corrompu (laissé tel quel)
 
@@ -126,6 +127,12 @@ local MIGRATIONS: { [number]: Migration } = {
 		pets.freeEggs = {}
 		return data
 	end,
+	-- v5 (Phase 4, missions) : `quests` (tableaux quotidien et hebdomadaire, jamais tirés : période −1) et `boosts`
+	-- (vide) sont ajoutés par la réconciliation ; les missions de la période sont tirées au chargement par
+	-- QuestService. Aucune donnée existante n'est touchée.
+	[5] = function(data: any): any
+		return data
+	end,
 }
 
 local DataSchema = {
@@ -181,6 +188,12 @@ function DataSchema.template(now: number): PlayerData
 			hatched = 0,
 			freeEggs = {},
 		},
+		quests = {
+			daily = { period = -1, missions = {} },
+			weekly = { period = -1, missions = {} },
+			claimed = 0,
+		},
+		boosts = {},
 		stats = {
 			harvests = 0,
 			perfectHarvests = 0,
@@ -499,6 +512,58 @@ function DataSchema.sanitize(data: PlayerData, now: number?): { string }
 	if changed or #cleaned ~= #pets.equipped then
 		quarantine(data, notes, "pets.equipped", pets.equipped, "familiers équipés invalides -> retirés", at)
 		pets.equipped = cleaned
+	end
+
+	-- Missions (Phase 4, jalon D) : un tableau invalide (période, mission malformée) part en quarantaine tel quel et
+	-- sera tiré à nouveau ; les boosts malformés aussi. Boost inconnu bien formé : conservé, sans effet.
+	local quests = raw.quests
+	for _, kind in { "daily", "weekly" } do
+		local board = quests[kind]
+		local valid = type(board) == "table"
+			and type(board.period) == "number"
+			and board.period % 1 == 0
+			and board.period >= -1
+			and type(board.missions) == "table"
+		if valid then
+			for _, mission in board.missions do
+				local rewards = if type(mission) == "table" then mission.rewards else nil
+				local ok = type(mission) == "table"
+					and type(mission.id) == "string"
+					and #mission.id <= QuestConfig.MaxIdLength
+					and type(mission.template) == "string"
+					and type(mission.difficulty) == "string"
+					and isNonNegativeInteger(mission.target)
+					and mission.target >= 1
+					and isNonNegativeInteger(mission.progress)
+					and mission.progress <= mission.target
+					and (mission.plantId == nil or type(mission.plantId) == "string")
+					and type(mission.claimed) == "boolean"
+					and type(rewards) == "table"
+					and BigNum.isValid(rewards.coins)
+					and not BigNum.isNegative(rewards.coins)
+					and isNonNegativeInteger(rewards.eggs)
+					and (rewards.boost == nil or type(rewards.boost) == "string")
+					and (rewards.decoration == nil or type(rewards.decoration) == "string")
+				if not ok then
+					valid = false
+					break
+				end
+			end
+		end
+		if not valid then
+			quarantine(data, notes, "quests." .. kind, board, "missions invalides -> nouveau tirage", at)
+			quests[kind] = { period = -1, missions = {} }
+		end
+	end
+	if not isNonNegativeInteger(quests.claimed) then
+		quarantine(data, notes, "quests.claimed", quests.claimed, "compteur invalide -> 0", at)
+		quests.claimed = 0
+	end
+	for key, value in raw.boosts do
+		if type(key) ~= "string" or not isTimestamp(value) then
+			raw.boosts[key] = nil
+			quarantine(data, notes, "boosts." .. tostring(key), value, "boost invalide", at)
+		end
 	end
 
 	-- Compteurs.

@@ -4,6 +4,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage.Shared
 local GameConfig = require(Shared.Config.GameConfig)
@@ -13,8 +14,10 @@ local Economy = require(Shared.Util.Economy)
 local Format = require(Shared.Util.Format)
 local Inventory = require(Shared.Util.Inventory)
 local ProgressionMath = require(Shared.Util.ProgressionMath)
+local Quests = require(Shared.Util.Quests)
 local DataService = require(script.Parent.DataService)
 local Notifier = require(script.Parent.Parent.Infra.Notifier)
+local QuestNotifier = require(script.Parent.Parent.Infra.QuestNotifier)
 
 type BigNum = Types.BigNum
 
@@ -69,14 +72,17 @@ function EconomyService.SellAll(player: Player): BigNum?
 	end
 	-- Total calculé DANS le mutateur (sac et multiplicateur lus dans le même état atomique, même face à un rebirth).
 	local total = BigNum.zero()
+	local completed: { Types.Mission } = {}
 	DataService.Update(player, function(d)
 		total = Economy.sellValue(d.bag.items, ProgressionMath.incomeMultiplier(d))
 		d.currencies.coins = BigNum.add(d.currencies.coins, total)
 		ProgressionMath.recordEarnings(d, total)
 		d.stats.sells += 1
 		d.bag.items = {}
+		completed = Quests.record(d, "sell", 1, Workspace:GetServerTimeNow())
 	end)
 	Notifier.send(player, "success", string.format("%d récolte(s) vendue(s) : +%s Coins", count, Format.bigNum(total)))
+	QuestNotifier.completed(player, completed)
 	return total
 end
 

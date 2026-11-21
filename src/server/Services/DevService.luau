@@ -10,6 +10,7 @@
 --                                           récompense de mission)
 --   Invoke("startEvent", userId, eventId, duration?) : force un événement du monde maintenant (tests du jalon C)
 --   Invoke("stopEvent", userId)           : arrête l'événement forcé
+--   Invoke("questRecord", userId, objective, amount) : fait progresser un objectif de mission (tests du jalon D)
 -- API : aucune.
 
 local HttpService = game:GetService("HttpService")
@@ -24,6 +25,7 @@ local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
 local EventService = require(script.Parent.EventService)
 local PetService = require(script.Parent.PetService)
+local QuestService = require(script.Parent.QuestService)
 
 local MAX_GRANT = 1e15
 
@@ -73,6 +75,11 @@ local function invoke(command: unknown, userId: unknown, amount: unknown, extra:
 	elseif command == "stopEvent" then
 		EventService.ClearForced()
 		return true
+	elseif command == "questRecord" then
+		if type(amount) ~= "string" or type(extra) ~= "number" or extra ~= extra or extra < 1 then
+			return false
+		end
+		return QuestService.Record(player, amount, math.floor(extra))
 	end
 	return nil
 end

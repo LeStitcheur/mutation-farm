@@ -145,6 +145,17 @@ Simulations Lune également (pas de validation du vrai DataStore).
   **joueur et les drones**, une seule fois, sac inchangé à la vente ; **plusieurs joueurs** ; **rebirth et prestige**
   pendant un événement ; **sauvegarde** inchangée ; **aucun cumul**.
 
+### Ce qui est couvert hors Studio pour les missions (Phase 4, jalon D)
+- `Quests.spec` (18 tests) : **périodes UTC** (bascule à 00:00, semaine au lundi 00:00) ; **tirage** (3 quotidiennes
+  facile/moyenne/difficile + 2 hebdomadaires, modèles distincts, identifiants uniques, **déterministe**) ;
+  **récompenses** proportionnelles à la difficulté et au revenu ; **éligibilité** (drones, plante débloquée, Mutadex
+  restant, rebirth déjà fait) ; **progression** des récoltes **manuelles et de drones**, Parfait, **mutations**
+  (rares ×8), plante précise, plafonnée à l'objectif ; période échue figée ; **rebirth et prestige** sans effet ;
+  **récupération unique** (Coins gagnés, œuf, boost, décoration ; seconde tentative refusée) ; **expiration** puis
+  nouveau tirage ; **triche** (identifiant inconnu, mission non terminée, sauvegarde trafiquée en quarantaine) ;
+  **concurrence** ; **reconnexion / changement de serveur** sans nouveau tirage ; **boosts** (effet, expiration,
+  durée plafonnée) ; **migration v4 -> v5**.
+
 ### Ce qui n'est PAS couvert automatiquement
 Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
 → checklist ci-dessous, déroulée via Studio MCP (§3) ; ce qui exige un humain reste marqué comme tel.
@@ -280,6 +291,7 @@ fenêtres de test sont visibles par le MCP). Ne cocher qu'après exécution rée
 | **Améliorations : manette** (Phase 3) | Manette branchée | L2 ouvre le panneau, onglet sélectionné ; croix pour passer d'un onglet aux lignes, A achète (niveau + 1, solde mis à jour), B ferme |
 | **Améliorations : persistance réelle** (Phase 3) | Comme « Sauvegarde réelle » | Niveaux achetés restaurés après Stop / Play ; améliorations Essence perdues et permanentes conservées après un prestige réel |
 | **Mutadex : persistance réelle** (Phase 4) | Comme « Sauvegarde réelle » | Découvertes, compteurs, dates et paliers restaurés après Stop / Play et après un changement de serveur ; ancienne sauvegarde v2 migrée sans perte |
+| **Missions : renouvellement réel** (Phase 4) | Session ouverte à travers 00:00 UTC (ou un lundi 00:00 UTC) ; place publiée | Nouvelles missions annoncées sans reconnexion ; les anciennes non récupérées disparaissent ; changement de serveur juste après : mêmes missions, même progression |
 | **Événements : multijoueur et mobile** (Phase 4) | Serveur local à 2 joueurs ; appareil mobile | Même événement, même compte à rebours pour les deux ; un joueur qui rejoint pendant l'événement voit le bandeau et les effets ; pluie et paillettes fluides sur mobile ; éclairage restauré à la fin |
 | **Familiers : persistance réelle** (Phase 4) | Comme « Sauvegarde réelle » | Éclosion puis arrêt brutal du serveur : le familier est présent au retour (sauvegarde avant confirmation) ; équipement, niveaux et œufs gratuits restaurés après changement de serveur |
 | **Familiers : performance mobile** (Phase 4) | Appareil d'entrée de gamme, 3 familiers équipés, plusieurs joueurs | Images par seconde stables, familiers qui suivent sans saccade, aucune erreur ; panneau Familiers lisible (*Test › Device*) ; manette : L3 ouvre, B ferme |

@@ -20,6 +20,7 @@ local Events = {
 	PetEquip = "PetEquip", -- identifiant d'instance
 	PetUnequip = "PetUnequip", -- identifiant d'instance
 	PetRelease = "PetRelease", -- identifiant d'instance (familier non équipé)
+	QuestClaim = "QuestClaim", -- identifiant de mission (récupération unique)
 	-- Serveur -> Client
 	StateSync = "StateSync",
 	HarvestResult = "HarvestResult",

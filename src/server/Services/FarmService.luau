@@ -15,6 +15,7 @@ local FarmLayout = require(Shared.Util.FarmLayout)
 local Signal = require(Shared.Util.Signal)
 local SlotAllocator = require(Shared.Util.SlotAllocator)
 local Bonuses = require(Shared.Util.Bonuses)
+local Quests = require(Shared.Util.Quests)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
 local EventService = require(script.Parent.EventService)
@@ -303,11 +304,14 @@ function FarmService.PlantTile(player: Player, tileId: string): boolean
 		return false
 	end
 	local plantId = PlantService.GetSelectedSeed(data)
-	-- Chance : améliorations + familiers, × Pluie mutagène si elle est active À LA PLANTATION (plafonnée).
-	local mutation = MutationService.Roll(Bonuses.luck(data, EventService.LuckFactor()))
+	-- Chance : améliorations + familiers, × Pluie mutagène et × Rosée chanceuse (boost de mission) actives À LA
+	-- PLANTATION, plafonnée à UpgradeConfig.Caps.MaxTotalLuck.
+	local plantedAt = Workspace:GetServerTimeNow()
+	local luckFactor = EventService.LuckFactor() * Quests.luckBoost(data, plantedAt)
+	local mutation = MutationService.Roll(Bonuses.luck(data, luckFactor))
 	local tile: TileState = {
 		plantId = plantId,
-		plantedAt = Workspace:GetServerTimeNow(),
+		plantedAt = plantedAt,
 		growTime = PlantService.ComputeGrowTime(data, plantId),
 		mutation = if mutation ~= MutationConfig.NORMAL then mutation else nil,
 	}

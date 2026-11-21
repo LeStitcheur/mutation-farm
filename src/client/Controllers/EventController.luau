@@ -174,6 +174,8 @@ local function buildBanner(root: Instance)
 		local camera = Workspace.CurrentCamera
 		if camera then
 			scale.Scale = Theme.scaleFor(camera.ViewportSize, UserInputService.TouchEnabled)
+			-- Juste sous la barre du haut (8 px + 58 px à la même échelle) : jamais de chevauchement.
+			frame.Position = UDim2.new(0.5, 0, 0, math.floor(8 + 66 * scale.Scale))
 		end
 	end
 	updateScale()

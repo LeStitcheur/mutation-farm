@@ -18,11 +18,13 @@ local PetConfig = require(Shared.Config.PetConfig)
 local Types = require(Shared.Types)
 local Format = require(Shared.Util.Format)
 local Pets = require(Shared.Util.Pets)
+local Quests = require(Shared.Util.Quests)
 local Net = require(Shared.Net)
 local DataService = require(script.Parent.DataService)
 local HarvestService = require(script.Parent.HarvestService)
 local ProgressionService = require(script.Parent.ProgressionService)
 local Notifier = require(script.Parent.Parent.Infra.Notifier)
+local QuestNotifier = require(script.Parent.Parent.Infra.QuestNotifier)
 local RateLimiter = require(script.Parent.Parent.Infra.RateLimiter)
 
 local ATTRIBUTE = "Pets"
@@ -69,8 +71,13 @@ function PetService.Hatch(player: Player, eggId: string, expectedHatched: number
 	local outcome: Pets.HatchOutcome? = nil
 	local failure: Pets.HatchFailure? = nil
 	local roll = rng:NextNumber()
+	local completed: { Types.Mission } = {}
 	DataService.Update(player, function(data)
-		outcome, failure = Pets.hatch(data, eggId, expectedHatched, useFree, roll, Workspace:GetServerTimeNow())
+		local now = Workspace:GetServerTimeNow()
+		outcome, failure = Pets.hatch(data, eggId, expectedHatched, useFree, roll, now)
+		if outcome then
+			completed = Quests.record(data, "hatch", 1, now)
+		end
 	end)
 	local result = outcome
 	if not result then
@@ -104,6 +111,7 @@ function PetService.Hatch(player: Player, eggId: string, expectedHatched: number
 		saved = saved,
 	}
 	Net.event(Net.Events.PetHatched):FireClient(player, payload)
+	QuestNotifier.completed(player, completed)
 	if def then
 		Notifier.send(
 			player,

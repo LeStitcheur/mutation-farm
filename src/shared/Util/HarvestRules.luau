@@ -16,6 +16,7 @@ local Mutadex = require(script.Parent.Mutadex)
 local MutadexConfig = require(script.Parent.Parent.Config.MutadexConfig)
 local Bonuses = require(script.Parent.Bonuses)
 local Pets = require(script.Parent.Pets)
+local Quests = require(script.Parent.Quests)
 
 type PlayerData = Types.PlayerData
 
@@ -30,7 +31,8 @@ export type Outcome = {
 	discovered: boolean, -- première récolte de cette combinaison (Mutadex)
 	milestones: { MutadexConfig.MilestoneDef }, -- paliers du Mutadex accordés par cette découverte
 	petLevelUps: { Pets.LevelUp }, -- familiers équipés passés au niveau supérieur (XP de cette récolte)
-	eventBonus: Types.BigNum, -- Floraison dorée : part de la valeur versée À LA RÉCOLTE (0 hors événement)
+	eventBonus: Types.BigNum, -- Floraison dorée (+ Engrais) : part de la valeur versée À LA RÉCOLTE (0 sinon)
+	questsCompleted: { Types.Mission }, -- missions terminées par cette récolte
 }
 
 local HarvestRules = {}
@@ -90,11 +92,21 @@ function HarvestRules.apply(
 	local discovered = Mutadex.record(data, tile.plantId, mutation, now)
 	local milestones = if discovered then Mutadex.claimMilestones(data, now) else {}
 	local petLevelUps = Pets.grantXp(data, Pets.harvestXp(source, tier))
+	-- Part de valeur versée à la récolte : événement (Floraison dorée) + boost personnel actif (Engrais, missions).
+	local valueShare = (if eventValueBonus and eventValueBonus > 0 then eventValueBonus else 0)
+		+ Quests.valueBoost(data, now)
 	local eventBonus = BigNum.zero()
 	local value = Economy.itemValue(tile.plantId, mutation)
-	if eventValueBonus and eventValueBonus > 0 and value then
-		eventBonus = BigNum.mulNumber(value, eventValueBonus * ProgressionMath.incomeMultiplier(data))
+	if valueShare > 0 and value then
+		eventBonus = BigNum.mulNumber(value, valueShare * ProgressionMath.incomeMultiplier(data))
 	end
+	local questsCompleted = Quests.recordHarvest(data, {
+		plantId = tile.plantId,
+		mutation = mutation,
+		tier = tier,
+		source = source,
+		discovered = discovered,
+	}, now)
 	return {
 		plantId = tile.plantId,
 		mutation = mutation,
@@ -105,6 +117,7 @@ function HarvestRules.apply(
 		milestones = milestones,
 		petLevelUps = petLevelUps,
 		eventBonus = eventBonus,
+		questsCompleted = questsCompleted,
 	}
 end
 

@@ -145,7 +145,17 @@ non fusionnée).
 - [ ] Validation Studio MCP (`docs/TESTING.md` §2.10) — en attente de la connexion du plugin Rojo
 - [ ] Manuel : multijoueur et mobile (`docs/TESTING.md` §2.4)
 
-**Jalon D — Missions** : à venir.
+**Jalon D — Missions (implémenté, validation Studio en attente)**
+- [x] 3 quotidiennes (00:00 UTC) et 2 hebdomadaires (lundi 00:00 UTC), tirées par le serveur (déterministe par
+      joueur et période) puis sauvegardées : aucun nouveau tirage en changeant de serveur
+- [x] Catalogue de 11 modèles, éligibilité, difficultés, objectifs, expiration, récupération unique
+- [x] Récompenses proportionnelles : Coins (× revenu), Œufs des missions, boosts (Engrais, Rosée chanceuse),
+      décorations (cosmétiques)
+- [x] Progression dans le mutateur de chaque action (récoltes joueur et drones, ventes, éclosions, rebirths)
+- [x] Panneau Missions (onglets, progression, récompenses, temps restant, Récupérer ; J / R3 ; pastille)
+- [x] Schéma v5 + migration v4 -> v5 ; tests Lune : 296 (dont `Quests.spec` 18)
+- [ ] Validation Studio MCP (`docs/TESTING.md` §2.11) — en attente de la connexion du plugin Rojo
+- [ ] Manuel : renouvellement réel à 00:00 UTC, mobile, manette (`docs/TESTING.md` §2.4)
 
 ## Phase 5 — Croissance de la ferme et automatisation (ex-Phase 4, replanifiée)
 - [ ] Améliorations normales (vitesse, valeur, sac) — UpgradeService + UI

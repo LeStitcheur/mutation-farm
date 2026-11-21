@@ -67,6 +67,12 @@ export type PlayerData = {
 		hatched: number, -- v4 : œufs ouverts (révision attendue : idempotence des éclosions)
 		freeEggs: { [string]: number }, -- v4 : œufs gagnés (missions, objectifs) non ouverts, par type
 	},
+	quests: { -- v5 : missions de la période courante (tirées une fois par le serveur, puis sauvegardées)
+		daily: QuestBoard,
+		weekly: QuestBoard,
+		claimed: number, -- missions récupérées au total (statistique)
+	},
+	boosts: { [string]: number }, -- v5 : boosts temporaires actifs -> fin (horodatage serveur Unix)
 	stats: {
 		harvests: number,
 		perfectHarvests: number,
@@ -95,6 +101,30 @@ export type PetInstance = {
 	level: number, -- 1 … PetConfig.Level.Max
 	xp: number, -- XP vers le niveau suivant (0 au niveau maximum)
 	obtainedAt: number, -- horodatage serveur Unix
+}
+
+-- Missions (Phase 4, jalon D).
+export type MissionRewards = {
+	coins: BigNum, -- déjà multiplié par le revenu du joueur au tirage
+	eggs: number, -- Œufs des missions
+	boost: string?, -- QuestConfig.Boosts
+	decoration: string?, -- QuestConfig.Decorations (cosmétique)
+}
+
+export type Mission = {
+	id: string, -- « d:<période>:<emplacement> » / « w:… » : unique et stable
+	template: string, -- QuestConfig.Templates
+	difficulty: string, -- "easy" | "medium" | "hard"
+	target: number,
+	progress: number, -- ≤ target
+	plantId: string?, -- objectif « harvest_plant »
+	claimed: boolean,
+	rewards: MissionRewards,
+}
+
+export type QuestBoard = {
+	period: number, -- jour UTC (quotidien) ou semaine commençant le lundi (hebdomadaire) ; −1 = jamais tirée
+	missions: { Mission },
 }
 
 -- Familiers répliqués au client (panneau, aperçus des bonus).
@@ -140,6 +170,8 @@ export type ClientState = {
 	mutadex: { [ItemKey]: MutadexEntry },
 	mutadexRewards: { [string]: number },
 	pets: ClientPets,
+	quests: { daily: QuestBoard, weekly: QuestBoard },
+	boosts: { [string]: number },
 	harvests: number,
 	perfectHarvests: number,
 }

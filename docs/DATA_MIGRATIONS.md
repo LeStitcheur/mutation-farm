@@ -37,7 +37,8 @@ donnée brute ──> version future ? ── oui ──> refus (aucune écritur
 | 1 | Phases 0–2 | Schéma initial : monnaies, ferme, graines, sac, améliorations, machines (drones), progression (`rebirths`, `prestiges`), Mutadex, cosmétiques, familiers, statistiques, reçus, méta |
 | 2 | Phase 3, jalon A | Progression : `revision`, `cycleCoins`, `prestigeCoins` ; `stats.totalRebirths` ; `meta.quarantine` |
 | 3 | Phase 4, jalon A | Mutadex : `mutadex[clé] = { firstAt, count }` (au lieu d'un horodatage) ; `mutadexRewards` (paliers accordés) |
-| **4** | Phase 4, jalon B | Familiers : `pets.instances` (instances uniques), `equipped` = identifiants d'instances, `nextSerial`, `hatched`, `freeEggs` |
+| 4 | Phase 4, jalon B | Familiers : `pets.instances` (instances uniques), `equipped` = identifiants d'instances, `nextSerial`, `hatched`, `freeEggs` |
+| **5** | Phase 4, jalon D | Missions : `quests.daily` / `quests.weekly` (`period`, `missions`), `quests.claimed` ; `boosts` (fin des boosts temporaires) |
 
 ### Migration v1 → v2 (`MIGRATIONS[2]`)
 - `progression.revision = 0`.
@@ -68,6 +69,13 @@ Conséquence : un joueur v1 ayant déjà gagné ≥ 100 000 Coins peut faire son
   n'est pas converti (il reste dans `owned`).
 - `nextSerial` = dernier numéro + 1, `hatched = 0`, `freeEggs = {}`. Une table `pets.instances` déjà présente
   n'est jamais écrasée.
+
+### Migration v4 → v5 (`MIGRATIONS[5]`, missions)
+- Aucune transformation : `quests` (tableaux de période −1, jamais tirés) et `boosts` (vide) sont ajoutés par la
+  réconciliation ; `QuestService` tire les missions de la période au chargement du profil.
+- Assainissement : un tableau de missions invalide (période, mission malformée, progression > objectif) part en
+  quarantaine tel quel puis est tiré à nouveau ; compteur `claimed` invalide → 0 (quarantaine) ; boost malformé →
+  quarantaine ; boost inconnu bien formé → conservé, sans effet.
 
 ### Réconciliation : types incompatibles (correctif Phase 4)
 Avant la Phase 4, `DataSchema.reconcile` remplaçait **silencieusement** une valeur d'un autre type que le gabarit

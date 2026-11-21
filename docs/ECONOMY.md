@@ -334,3 +334,16 @@ Constats :
   ≈ 9 Floraisons tirées parmi ≈ 23 événements, soit ≈ 1 h 50 de Floraison), le gain moyen est ≈ +4 % pour qui
   joue en continu.
 - Non simulé (`tests/sim`) : les ordres de grandeur ci-dessus sont calculés à partir des formules, pas mesurés.
+
+## 11. Missions (Phase 4, jalon D ; détail : `docs/QUESTS.md`)
+
+- **Récompenses en Coins** = base × multiplicateur de revenu au tirage : quotidiennes 1 500 / 4 000 / 10 000,
+  hebdomadaires 40 000 / 100 000. Pour un joueur neuf (revenu ≈ 3 000 Coins/min au stade Tomate), les trois
+  quotidiennes rapportent ≈ 5 min de revenu ; l'objectif chiffré (40 à 300 récoltes) représente 5 à 30 min de jeu.
+  Le multiplicateur garde ce rapport après les rebirths et prestiges.
+- **Œufs des missions** : 1 par jour (difficile), 5 par semaine (hebdomadaires) → ≈ 12 œufs gratuits par semaine
+  pour un joueur assidu ; c'est la seule source de l'Œuf des missions (Feu follet primal 4 %).
+- **Boosts** : Engrais (+25 % de valeur versés à la récolte, 10 min) ≈ +25 % de revenu actif pendant 10 min ;
+  Rosée chanceuse (chance × 1,5 à la plantation, 15 min), plafonnée avec tout le reste à 5.
+- Les Coins de mission comptent comme gagnés : ils avancent le rebirth (≈ 15 % du premier seuil pour les trois
+  quotidiennes d'un joueur neuf).

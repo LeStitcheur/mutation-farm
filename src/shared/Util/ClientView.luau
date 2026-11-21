@@ -31,6 +31,8 @@ function ClientView.build(data: Types.PlayerData): Types.ClientState
 			hatched = data.pets.hatched,
 			freeEggs = data.pets.freeEggs,
 		},
+		quests = { daily = data.quests.daily, weekly = data.quests.weekly },
+		boosts = data.boosts,
 		harvests = data.stats.harvests,
 		perfectHarvests = data.stats.perfectHarvests,
 	}
