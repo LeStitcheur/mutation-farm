@@ -30,12 +30,14 @@ src/
     Config/MutationOdds   Poids de mutation (jamais répliqués)
     Infra/                DataStoreAdapter, RateLimiter, Notifier
     Services/             DataService, EconomyService, PlantService, MutationService, FarmService, HarvestService,
-                          DroneService, RebirthService, DevService (Studio uniquement), SyncService
+                          DroneService, ProgressionService, RebirthService, PrestigeService,
+                          DevService (Studio uniquement), SyncService
   client/   -> StarterPlayer.StarterPlayerScripts.Client
     init.client.luau      Bootstrap des contrôleurs
     Controllers/          StateController, HudController, RebirthController, PlantRenderer, HarvestController,
                           DroneRenderer
-    UI/                   Theme, Builder, PanelHub (un panneau à la fois, chat masqué)
+    UI/                   Theme, Builder, PanelHub (un panneau à la fois, chat masqué),
+                          ConfirmPanel (panneau information + confirmation commun à Rebirth et Prestige)
     Visuals/              PlantVisuals (modèles procéduraux)
 tests/
   run.luau                Runner Lune (simule require(script…) et game:GetService)
@@ -53,23 +55,25 @@ DataService ─┬─> EconomyService ──> PlantService ──> FarmService �
 ```
 (`MutationService` ne dépend que de configurations : `MutationOdds`, `MutationConfig`, `MutationRoll`.
 `DroneService` dépend de `HarvestService`, `FarmService`, `EconomyService` et `DataService`.
-`RebirthService` dépend de `DataService`, `FarmService` et `DroneService` ; `DevService` de `DataService` et
-`EconomyService` ; rien ne dépend d'eux.)
+`ProgressionService` dépend de `DataService`, `FarmService` et `DroneService` ; `RebirthService` et
+`PrestigeService` dépendent de `ProgressionService` ; `DevService` de `DataService` et `EconomyService` ; rien ne
+dépend de ces trois derniers.)
 
 | Service | Responsabilité | API publique principale |
 |---|---|---|
 | **DataService** | Chargement/sauvegarde, verrou de session, autosave, migrations | `GetData`, `Update`, `IsLoaded`, `SaveNow`, signaux `ProfileLoaded`, `ProfileReleasing`, `Changed` |
-| **EconomyService** | Coins, vente du sac (× multiplicateur de rebirth, calculé dans le mutateur) ; tout gain alimente l'historique et les cycles (`ProgressionMath.recordEarnings`) | `AddCoins`, `TrySpendCoins`, `SellAll` |
+| **EconomyService** | Coins, vente du sac (× multiplicateur de revenu rebirth × prestige, calculé dans le mutateur) ; tout gain alimente l'historique et les cycles (`ProgressionMath.recordEarnings`) | `AddCoins`, `TrySpendCoins`, `SellAll` |
 | **PlantService** | Graines (déblocage, sélection), durée de pousse effective | `GetSelectedSeed`, `ComputeGrowTime`, `UnlockSeed`, `SelectSeed` |
 | **FarmService** | Parcelles (attribution, construction), état des cases, replantation | `PlantTile`, `ReplantEmpty`, `GetTilePart`, `OwnsTile`, `GetPlotModel`, `GetPlotOrigin`, signal `PlotReady` |
 | **HarvestService** | Récoltes joueur et drone (règles communes `HarvestRules`), bonus de précision (joueur seulement), notification des mutations ≥ ×8 | `Harvest`, `HarvestForDrone` |
 | **SyncService** | Réplication de l'état joueur (coalescée, ≤ 10 Hz) | — |
 | **MutationService** | Tirage pondéré exclusif d'une mutation par plantation (`Random` serveur, poids `MutationOdds`) ; valide la configuration au démarrage | `Roll` |
 | **DroneService** | Station d'achat (ProximityPrompt serveur, propriétaire seulement), flotte sauvegardée (`machines.drones`), **une** boucle serveur pour tous les drones, ancres `FarmDrone` | `Buy`, `Refresh` |
-| **RebirthService** | Rebirth (Phase 3, jalon A) : verrou par joueur, débit, transition atomique `Resets.rebirth` (§7.1), replantation, flotte vidée, sauvegarde immédiate | `Rebirth` |
+| **ProgressionService** | Exécution commune des transitions (§7.1) : verrou par joueur partagé rebirth/prestige, mutateur unique, replantation, flotte recalculée, notification, sauvegarde immédiate ; validation des révisions reçues | `Run`, `IsValidRevision` |
+| **RebirthService** | Rebirth (Phase 3, jalon A) : remote, débit, règle `Resets.rebirth` exécutée par `ProgressionService.Run` | `Rebirth` |
+| **PrestigeService** | Prestige (Phase 3, jalon B) : remote, débit, règle `Resets.prestige` exécutée par `ProgressionService.Run` | `Prestige` |
 | **DevService** | Outils de test **Studio uniquement** (`RunService:IsStudio()`) : `ServerStorage.MutationFarmDev` (BindableFunction, inaccessible aux clients) — `grantEarned`, `snapshot` | — |
 | *AutomationService* | Phase 4 (drones collecteurs, vente auto, hors ligne) | |
-| *PrestigeService* | Phase 3, jalon B | |
 | *PurchaseService* | Phase 6 | |
 
 Convention : chaque module service expose `Init()` (connexions, création d'instances) et `Start()` (boucles,
@@ -83,6 +87,7 @@ traitement des joueurs). `DataService.Start` est appelé en **dernier** pour que
 | `UnlockSeed` | C→S | `plantId: string` | type, 4 req/s, existence, ordre séquentiel, solde |
 | `SelectSeed` | C→S | `plantId: string` | type, 4 req/s, graine débloquée |
 | `RebirthRequest` | C→S | `revision: number` (révision de progression affichée) | type, fini, entier, 0 ≤ r < 2³¹, 0,5 req/s, verrou par joueur ; révision = révision courante (sinon refus sans effet), seuil de Coins gagnés pendant le cycle |
+| `PrestigeRequest` | C→S | `revision: number` (révision de progression affichée) | mêmes contrôles que `RebirthRequest` (verrou **partagé**) ; rebirths depuis le dernier prestige et Coins gagnés depuis le dernier prestige ≥ conditions |
 | `ClientReady` | C→S | — | 1 req/s ; si profil chargé : renvoi de `LoadStatus` + `StateSync` (rattrape les événements émis avant la connexion des écouteurs) |
 | `StateSync` | S→C | `ClientState` | — |
 | `HarvestResult` | S→C | `{ tileId, plantId, mutation, tier, bonus, source }` (`source` : `"player"` / `"drone"`) | — |
@@ -150,14 +155,16 @@ multi-serveurs ; `DataService` ne fait que les appliquer dans `UpdateAsync`)
 6. **Jamais** de jeu sans données chargées : en cas d'échec, kick avec message (aucune sauvegarde d'un gabarit vide).
 7. **Studio** : si l'accès API est désactivé, repli automatique sur un store mémoire (avertissement en console).
 
-### 7.1 Transitions de progression (rebirth ; prestige au jalon B)
+### 7.1 Transitions de progression (rebirth, prestige — `ProgressionService.Run`)
 
 Règles et listes exactes : `docs/PROGRESSION.md`. Principe :
 1. Le client n'envoie que la `revision` de progression qu'il affiche.
-2. Validation, reset et récompense s'exécutent dans **un seul** mutateur synchrone (`Resets.rebirth` dans
-   `DataService.Update`) : aucune récolte, vente ou tâche de drone ne peut s'intercaler ; une révision périmée
-   (requête rejouée, doublée ou concurrente) est refusée sans effet ; `revision + 1` à chaque transition.
-3. Verrou `busy[player]` pendant la transition (replantation, flotte, sauvegarde) : une seule transition à la fois.
+2. Validation, reset et récompense s'exécutent dans **un seul** mutateur synchrone (`Resets.rebirth` ou
+   `Resets.prestige` dans `DataService.Update`) : aucune récolte, vente ou tâche de drone ne peut s'intercaler ; une
+   révision périmée (requête rejouée, doublée, concurrente ou préparée avant l'autre type de transition) est refusée
+   sans effet ; `revision + 1` à chaque transition.
+3. Verrou par joueur **commun** à toutes les transitions pendant la replantation, la flotte et la sauvegarde : une
+   seule transition à la fois ; une erreur après le mutateur est journalisée et libère toujours le verrou.
 4. `SaveNow` immédiat ; chaque enregistrement contient l'état avant **ou** après (jamais de récompense sans reset).
    Échec : avertissement, l'autosave réessaie avec le même état cohérent.
 

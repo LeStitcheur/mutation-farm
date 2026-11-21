@@ -26,10 +26,11 @@ Phase 3** avec un simulateur Lune.
 ## 2. Récolte et vente
 
 - **Sac** : capacité de base 40 objets (améliorations Phase 3).
-- **Valeur de vente** = `valeurBase(plante) × multiplicateur(mutation) × M(R)` où `M(R)` est le multiplicateur de
-  rebirth (§4), appliqué au total du sac et arrondi à l'inférieur (améliorations : jalon C).
+- **Valeur de vente** = `valeurBase(plante) × multiplicateur(mutation) × M(R) × Mp(P)` où `M(R)` et `Mp(P)` sont
+  les multiplicateurs de rebirth et de prestige (§4), appliqués au total du sac et arrondis à l'inférieur
+  (améliorations : jalon C).
 - **Bonus de précision** du joueur (Coins instantanés, arrondis à l'inférieur) :
-  Parfait (≤ 1,5 s) = 50 % de la valeur de base, Bien (≤ 5 s) = 20 %, puis `× M(R)` (jamais la mutation).
+  Parfait (≤ 1,5 s) = 50 % de la valeur de base, Bien (≤ 5 s) = 20 %, puis `× M(R) × Mp(P)` (jamais la mutation).
 - **Coins gagnés** (ventes + bonus) : alimentent `stats.coinsEarned` et les compteurs de cycle (`docs/PROGRESSION.md`).
 
 ## 3. Mutations (Phase 2, implémenté)
@@ -72,8 +73,16 @@ Règles :
 - Réinitialise Coins, graines, sac, améliorations normales, drones, cultures et Coins du cycle ; conserve le reste.
 - Premier rebirth estimé à ≈ 14 min (jeu parfait) / ≈ 22 min (60 %) — à confirmer par le simulateur du jalon C.
 
-**Prestige (jalon B, à concevoir)** — structure testée (`Resets.prestige`), conditions et gain de Primal Cores à
-définir (`docs/PROGRESSION.md` §3).
+**Prestige (jalon B, implémenté)** — `ProgressionConfig.Prestige` :
+- **Conditions** (les deux) : rebirths depuis le dernier prestige ≥ 5 / 8 / 12 / 17 / 23… (`5 + 3p + p(p − 1)/2`) et
+  Coins gagnés depuis le dernier prestige ≥ 1e7 / 1e8 / 1e9… (`10⁷ × 10ᵖ`).
+- **Multiplicateur de prestige** permanent : `Mp(P) = 1 + 0,5 P + 0,08 P²` (×1,58 ; ×2,32 ; ×3,22…).
+- **Primal Cores** : `floor(10 × (1 + p)^0,75 × (1 + 0,25 × min(rebirths en plus, 4)))` (10, 16, 22… au minimum).
+- Réinitialise aussi parcelles achetées, rebirths du cycle, Mutation Essence, améliorations de rebirth et Coins du
+  cycle de prestige ; conserve Primal Cores, améliorations permanentes, Mutadex, cosmétiques, familiers, droits
+  Robux, statistiques.
+- Constat mesuré : la condition de Coins est toujours satisfaite quand le minimum de rebirths l'est (15,2 M gagnés
+  pour 5 rebirths > 10 M) ; elle reste un garde-fou configurable.
 
 L'ancien contrat Phase 5 (coût `5·10⁷ × 6ⁿ`, multiplicateur `1,5ⁿ`, Rebirth Tokens, prestige à `8 + 4p` rebirths) est
 **remplacé** par le cahier des charges Phase 3 ; `currencies.rebirthTokens` reste stocké mais n'est plus utilisé.
@@ -83,7 +92,7 @@ L'ancien contrat Phase 5 (coût `5·10⁷ × 6ⁿ`, multiplicateur `1,5ⁿ`, Reb
 1. Chaque graine débloquée augmente strictement le revenu par case et par seconde.
 2. Les prix de déblocage sont strictement croissants.
 3. Le temps de déblocage (jeu parfait, graine précédente, 9 cases) est strictement croissant et compris entre 30 s et 6 h.
-4. Le bonus de précision ne dépasse jamais 50 % de la valeur de base × `M(R)` (la mutation ne s'y applique pas).
+4. Le bonus de précision ne dépasse jamais 50 % de la valeur de base × `M(R) × Mp(P)` (jamais la mutation).
 5. Les Coins ne deviennent jamais négatifs : toute dépense passe par `EconomyService.TrySpendCoins`.
 6. Les multiplicateurs de mutation sont exactement 2, 4, 8, 20, 50, 150 ; les probabilités sont celles du §3 et
    somment à 1 ; E(1) = 1,5051 ∈ [1,4 ; 1,6] (avant Phase 2 : [1,1 ; 1,3]).
@@ -94,6 +103,9 @@ L'ancien contrat Phase 5 (coût `5·10⁷ × 6ⁿ`, multiplicateur `1,5ⁿ`, Reb
    du sac, et ne réduisent jamais les **ventes** du joueur (simulation, §7).
 10. Le premier drone se rembourse en ≤ 30 min là où il rapporte (Carotte en jeu actif, joueur absent qui vend).
 11. Délai de grâce ≥ fenêtre « Bien » ; des drones ne font jamais perdre plus de 1 % à un joueur attentif.
+12. Pas de cycle instantané après un prestige : `Mp(p + 1)` < `M(minimum de rebirths) × Mp(p)` (testé pour
+    p = 0..30 ; ex. ×1,58 juste après le 1ᵉʳ prestige contre ×3,125 juste avant). Conditions de prestige
+    strictement croissantes (testé jusqu'à p = 60).
 
 ## 6. Grands nombres
 

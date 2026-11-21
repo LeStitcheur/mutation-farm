@@ -1,10 +1,11 @@
 # MUTATION FARM — Progression (rebirth, prestige, améliorations)
 
-> Phase 3, branche `phase-3/progression`. Jalon A (**Rebirth**) implémenté ; jalon B (Prestige) et jalon C (arbres
+> Phase 3, branche `phase-3/progression`. Jalons A (**Rebirth**) et B (**Prestige**) implémentés ; jalon C (arbres
 > d'améliorations, simulateur à 5 profils) à venir.
 > Valeurs : `src/shared/Config/ProgressionConfig.luau`. Règles pures : `src/shared/Util/ProgressionMath.luau`
-> (formules) et `src/shared/Util/Resets.luau` (transitions). Service : `src/server/Services/RebirthService.luau`.
-> Interface : `src/client/Controllers/RebirthController.luau`.
+> (formules) et `src/shared/Util/Resets.luau` (transitions). Services : `ProgressionService` (exécution commune des
+> transitions), `RebirthService`, `PrestigeService`. Interface : `RebirthController`, `PrestigeController` sur le
+> panneau commun `src/client/UI/ConfirmPanel.luau`.
 
 ## 1. Cycles et compteurs
 
@@ -27,8 +28,9 @@ dépenser des Coins (graines, drones) ne retarde jamais un rebirth.
 ### Formules (`ProgressionConfig.Rebirth`)
 - **Seuil** du rebirth n° `n + 1` : `threshold(n) = 100 000 × 3,2ⁿ` Coins gagnés pendant le cycle
   (exact, arrondi à l'entier supérieur, pour `n ≤ 10` ; `BigNum` au-delà, écart relatif ≤ 10⁻¹⁰).
-- **Multiplicateur de revenu** après `R` rebirths : `M(R) = 1 + 0,35 R + 0,015 R²`, appliqué à la **valeur de vente**
-  et au **bonus de précision** du joueur (les drones n'ont jamais de bonus). Affiché tronqué au millième.
+- **Multiplicateur de rebirth** après `R` rebirths : `M(R) = 1 + 0,35 R + 0,015 R²`. Le **revenu** applique
+  `M(R) × Mp(P)` (`Mp` : multiplicateur de prestige, §3) à la **valeur de vente** et au **bonus de précision** du
+  joueur (les drones n'ont jamais de bonus). Affiché tronqué au millième. Le tableau ci-dessous est pour `P = 0`.
 - **Mutation Essence** gagnée : `floor(100 × (1 + n)^0,75 × min(cycleCoins / seuil, 4)^0,5)` — 100 pile au premier
   seuil ; dépasser le seuil rapporte plus, au plus ×2 (plafond atteint à 4× le seuil) : attendre n'est jamais
   très rentable, refaire un rebirth l'est davantage.
@@ -69,7 +71,8 @@ améliorations de rebirth et permanentes, Mutadex, cosmétiques, familiers, droi
 ### Déroulé et garanties (serveur autoritaire)
 1. Le client envoie `RebirthRequest(revision)` : uniquement la **révision** qu'il affiche (entier 0 ≤ r < 2³¹).
    Ni seuil, ni montant, ni récompense.
-2. `RebirthService` : verrou `busy[player]` (une transition à la fois par joueur), débit ≤ 0,5 requête/s.
+2. `RebirthService` : débit ≤ 0,5 requête/s ; `ProgressionService.Run` : verrou par joueur **partagé avec le
+   prestige** (jamais deux transitions simultanées, quel que soit leur type).
 3. **Un seul** mutateur synchrone `DataService.Update` exécute `Resets.rebirth` : révision attendue = révision
    courante, puis seuil, puis calcul de l'Essence, reset, `rebirths + 1`, `revision + 1`, `totalRebirths + 1`, Essence
    créditée. Rien ne peut s'intercaler (aucun `yield`) : **jamais de récompense sans reset**, et une requête rejouée
@@ -82,23 +85,76 @@ améliorations de rebirth et permanentes, Mutadex, cosmétiques, familiers, droi
    persistance réelle reste à valider, `docs/TESTING.md` §2.4).
 6. Notification « Rebirth n ! +E Mutation Essence · revenus ×M » ; `StateSync` met le HUD à jour.
 
-### Interface (`RebirthController`)
+### Interface (`RebirthController` sur `UI/ConfirmPanel`)
 - Bouton **Rebirth** (doré) sous **Graines** ; touche **R**, manette **L1** ; un seul panneau ouvert à la fois et
   chat masqué pendant l'ouverture (`UI/PanelHub`).
+- Revenus affichés : multiplicateur total (rebirth × prestige), actuel → après ce rebirth.
 - Panneau : rebirths réalisés, seuil du prochain rebirth (« le solde actuel ne compte pas »), barre de progression
   `cycleCoins / seuil`, récompense en Essence, multiplicateur actuel → futur, listes **Perdu** / **Conservé**.
 - Confirmation en deux étapes : « Rebirth… » (actif seulement au seuil) puis écran récapitulatif avec **Annuler**
   (sélectionné par défaut à la manette) et **Confirmer** (inactif pendant 1,5 s). **B** revient à l'écran précédent
   puis ferme. Mise à l'échelle `Theme.fitScale` (PC, téléphone, console).
 
-## 3. Prestige (jalon B — à concevoir)
+## 3. Prestige (jalon B — implémenté)
 
-Structure déjà testée (`Resets.prestige`) : reset de l'économie du cycle, des parcelles, des rebirths, de l'Essence
-et des améliorations de rebirth ; conserve Primal Cores (+ gain), améliorations permanentes, Mutadex, cosmétiques,
-familiers, reçus, statistiques. Points à trancher au jalon B :
-- seuils de prestige exprimés en Coins (1e7 / 1e8 / 1e9) : presque redondants avec les seuils de rebirth
-  (rebirth 6 ≈ 3,4e7, 8 ≈ 3,4e8, 10 ≈ 3,5e9) — préférer une condition en rebirths ou en `prestigeCoins` ;
-- le multiplicateur de rebirth retombe à ×1 au prestige (`R = 0`) : le gain de Primal Cores doit compenser.
+### Formules (`ProgressionConfig.Prestige`)
+- **Conditions** du prestige n° `p + 1` (`p` = prestiges déjà faits), **toutes deux** requises :
+  - rebirths depuis le dernier prestige ≥ `5 + 3p + p(p − 1)/2` → 5, 8, 12 (cahier des charges), puis 17, 23, 30… ;
+  - Coins **gagnés** depuis le dernier prestige (`prestigeCoins`) ≥ `10⁷ × 10ᵖ` → 1e7, 1e8, 1e9 (cahier des
+    charges), puis 1e10… (exact jusqu'à `p = 7`, `BigNum` au-delà ; croissance testée jusqu'à `p = 60`).
+- **Multiplicateur de prestige** (permanent, `P` = prestiges réalisés) : `Mp(P) = 1 + 0,5 P + 0,08 P²`.
+  Revenu total = `M(R) × Mp(P)`.
+- **Primal Cores** : `floor(10 × (1 + p)^0,75 × (1 + 0,25 × min(e, 4)))`, `e` = rebirths faits au-delà du minimum
+  (au plus ×2) — formule choisie au jalon B (le cahier des charges ne la fixe pas), configurable.
+
+| Prestige n° | Rebirths | Coins gagnés | Coins réellement gagnés pour atteindre ces rebirths* | Primal Cores (minimum) | Mp avant → après | Revenu juste avant → juste après |
+|---|---|---|---|---|---|---|
+| 1 | 5 | 10 M | ≈ 15,2 M | 10 | ×1 → ×1,58 | ×3,125 → ×1,58 |
+| 2 | 8 | 100 M | ≈ 500 M | 16 | ×1,58 → ×2,32 | ×7,52 → ×2,32 |
+| 3 | 12 | 1 G | ≈ 52,4 G | 22 | ×2,32 → ×3,22 | ×17,08 → ×3,22 |
+| 4 | 17 | 10 G | ≈ 1,76e13 | 28 | ×3,22 → ×4,28 | ×36,3 → ×4,28 |
+
+\* Somme des seuils de rebirth du cycle. **Constat mesuré** : avec les valeurs actuelles, atteindre le minimum de
+rebirths implique déjà la condition de Coins (15,2 M > 10 M, etc.). La condition de Coins reste appliquée et
+configurable (garde-fou si les seuils de rebirth sont rééquilibrés au jalon C), mais elle ne bloque jamais seule.
+**Invariant 12** (testé pour `p = 0..30`) : juste après un prestige, le revenu (`Mp(p + 1)`, rebirths à 0) est
+inférieur au revenu juste avant (au minimum de rebirths) — un prestige ne rend jamais les premiers cycles
+instantanés ; les Primal Cores (améliorations permanentes, jalon C) compensent sur la durée.
+
+### Ce qui est réinitialisé / conservé (`Resets.prestige`, conservation vérifiée champ par champ dans `Prestige.spec`)
+
+| Réinitialisé | Champ | Nouvelle valeur |
+|---|---|---|
+| Tout ce que réinitialise un rebirth (§2) | Coins, graines, sac, améliorations normales, drones, cultures, `cycleCoins` | comme au rebirth |
+| Parcelles achetées | `farm.plots` | parcelles par défaut (`main`) |
+| Rebirths du cycle | `progression.rebirths` | 0 |
+| Mutation Essence | `currencies.essence` | 0 |
+| Améliorations de rebirth | `upgrades.rebirth` | vide |
+| Statistiques économiques du cycle | `progression.prestigeCoins` | 0 |
+
+**Conservé** (tout champ non listé) : Primal Cores (+ gain), améliorations permanentes (`upgrades.permanent`),
+Mutadex, cosmétiques, familiers, **droits Robux** (`receipts` ; les Game Passes sont vérifiés auprès de Roblox, jamais
+stockés comme vérité), statistiques historiques (`stats`, dont `coinsEarned` et `totalRebirths`), `prestiges`
+(+1), `meta` (dont la quarantaine), `rebirthTokens` (obsolète).
+
+Limite connue : les extensions de parcelle ne sont pas encore achetables (Phase 4). Si une parcelle achetée est
+reprise par un prestige, ses cases sont refusées immédiatement par le serveur (`FarmLayout.isTileUnlocked`), mais sa
+géométrie reste visible jusqu'à la reconstruction de la parcelle (prochaine connexion) : à traiter avec l'achat des
+extensions.
+
+### Déroulé et garanties
+Identiques au rebirth (§2) : `PrestigeRequest(revision)` validé (entier, débit ≤ 0,5/s), `ProgressionService.Run`
+(verrou partagé, **un** mutateur `Resets.prestige`, replantation, flotte vidée, notification, `SaveNow`). Une requête
+répétée, rejouée ou préparée avant un rebirth trouve une révision périmée : jamais plusieurs récompenses (testé :
+100 requêtes = 1 récompense ; rebirth et prestige croisés ; requête rejouée après restauration).
+
+### Interface (`PrestigeController` sur `UI/ConfirmPanel`)
+- Bouton **Prestige** (violet) sous **Rebirth** ; touche **P**, manette **R1**.
+- Panneau : prestiges réalisés et Primal Cores, conditions avec deux barres (rebirths, Coins gagnés depuis le
+  dernier prestige), récompense, multiplicateur de prestige actuel → futur, revenus juste après, listes **Perdu** /
+  **Conservé**.
+- **Confirmation renforcée** : récapitulatif chiffré (rebirths et Essence perdus, Primal Cores gagnés), case
+  « J'ai compris » **obligatoire** et « Confirmer » inactif pendant **3 s** ; « Annuler » sélectionné par défaut.
 
 ## 4. Améliorations (jalon C — à venir)
 

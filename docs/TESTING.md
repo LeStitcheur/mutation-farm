@@ -70,6 +70,21 @@ Ce sont des **simulations** Lune : elles ne valent pas validation du vrai DataSt
 - `Format.spec` : affichage des multiplicateurs (`×1,365`, tronqué au millième).
 - Non couvert ici : `RebirthService` (verrou `busy`, débit, `SaveNow`), le panneau client → Studio (§2.5).
 
+### Ce qui est couvert hors Studio pour le prestige (Phase 3, jalon B)
+Simulations Lune également (pas de validation du vrai DataStore).
+- `Progression.spec` (+8 tests) : conditions exactes du cahier des charges (5 / 1e7, 8 / 1e8, 12 / 1e9) puis 17 / 1e10
+  et 23 / 1e11 ; croissance stricte et Coins exponentiels jusqu'à p = 60 (au-delà de 10¹⁵) ; nombres invalides
+  refusés ; les deux conditions requises (le solde ne compte jamais) ; `Mp(P)` ; Primal Cores (10, 12, 20, plafond,
+  16, 22) ; invariant 12 ; aperçu ; revenu = rebirth × prestige.
+- `Prestige.spec` (11 tests) : reset et récompense (12 Primal Cores pour 6 rebirths, révision + 1) ; **conservation
+  profonde** de tout le reste (Mutadex, cosmétiques, familiers, reçus Robux, améliorations permanentes, stats,
+  quarantaine) ; refus sans aucune modification (révision périmée, rebirths ou Coins insuffisants) ; **100 requêtes =
+  1 récompense** ; **révisions croisées** rebirth ↔ prestige ; cycle suivant au premier seuil avec ×1,58 ; récolte
+  et cible de drone préparées avant le prestige refusées, parcelle rendue refusée ; vente ×1,58 = 158 et bonus 7 ;
+  sauvegardes simulées toujours cohérentes ; requête rejouée après restauration refusée.
+  Contrôle de mutation : supprimer `revision + 1` dans `Resets.prestige` fait échouer 4 tests.
+- Non couvert ici : `ProgressionService` / `PrestigeService` (verrou partagé, débit, `SaveNow`), le panneau → Studio.
+
 ### Ce qui n'est PAS couvert automatiquement
 Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
 → checklist ci-dessous, déroulée via Studio MCP (§3) ; ce qui exige un humain reste marqué comme tel.
@@ -198,6 +213,9 @@ fenêtres de test sont visibles par le MCP). Ne cocher qu'après exécution rée
 | **Rebirth : persistance réelle** (Phase 3) | Comme « Sauvegarde réelle » ; en Studio, créditer le seuil avec `ServerStorage.MutationFarmDev:Invoke("grantEarned", userId, 100000)` (barre de commande serveur) | Rebirth confirmé → Stop immédiat → Play : rebirths = 1, Essence +100, Coins 0, Carotte seule, aucun drone ; jamais d'Essence sans le reset ; Stop pendant la transition : état avant **ou** après, jamais un mélange |
 | **Rebirth : mobile** (Phase 3) | *Test › Device* (téléphone), relancer Play | Bouton Rebirth sous Graines, panneau ajusté à l'écran (rien de coupé), « Rebirth… », « Annuler » et « Confirmer » utilisables au toucher ; chat masqué pendant l'ouverture puis restauré |
 | **Rebirth : manette** (Phase 3) | Manette branchée | L1 ouvre le panneau (sélection auto de l'action), A sur « Rebirth… » → « Annuler » sélectionné, « Confirmer » inactif 1,5 s, B revient à l'écran d'information puis ferme |
+| **Prestige : persistance réelle** (Phase 3) | Comme « Sauvegarde réelle » ; atteindre 5 rebirths (crédits `grantEarned` + rebirths) | Prestige confirmé → Stop immédiat → Play : prestiges = 1, Primal Cores +10 (ou plus), rebirths 0, Essence 0, parcelles par défaut, Mutadex / cosmétiques / reçus intacts ; jamais de Primal Cores sans le reset |
+| **Prestige : mobile** (Phase 3) | *Test › Device* (téléphone) | Menu à 3 boutons sans chevauchement avec le chat ; panneau Prestige ajusté à l'écran ; case « J'ai compris », « Annuler » et « Confirmer » utilisables au toucher |
+| **Prestige : manette** (Phase 3) | Manette branchée | R1 ouvre le panneau ; « Prestige… » → « Annuler » sélectionné ; croix vers la case « J'ai compris », A coche ; « Confirmer » actif seulement après 3 s **et** case cochée ; B revient puis ferme |
 
 ### 2.5 Phase 3, jalon A (rebirth) — validation Studio MCP du 2026-11-21 (Play solo, API désactivée)
 
@@ -226,6 +244,34 @@ réalisés en jeu. État lu par `Invoke("snapshot", …)` côté serveur et par 
 | Persistance réelle d'un rebirth | ⛔ non vérifiable | Store mémoire (pas d'accès API) ; sauvegardes cohérentes couvertes **en simulation** Lune (`RebirthConcurrency.spec`), protocole §2.4 |
 | Mobile | ⛔ non vérifiable | Pas de contrôle de l'émulateur ; même mise à l'échelle que le panneau Graines (`Theme.fitScale`) ; protocole §2.4 |
 | Concurrence récolte/drone pendant le reset | ⛔ non reproductible à la main | Fenêtre d'une seule image ; garantie par le mutateur synchrone, couverte en Lune (`RebirthConcurrency.spec`) |
+
+### 2.6 Phase 3, jalon B (prestige) — validation Studio MCP du 2026-11-21 (Play solo, API désactivée)
+
+Build de la branche `phase-3/progression` (ProgressionService, PrestigeService, PrestigeController, ConfirmPanel
+présents ; 12 services ; remote `PrestigeRequest` créé ; console sans erreur ni avertissement hors repli mémoire).
+Seuils crédités par `grantEarned` (outil Studio) ; chaque rebirth envoyé par `RebirthRequest` avec la révision
+attendue ; Tomate, drone, récoltes et ventes réalisés en jeu. Le rebirth (jalon A) a été revalidé au passage, désormais
+exécuté par `ProgressionService`.
+
+| Contrôle | Statut | Constat |
+|---|---|---|
+| Menu à 3 boutons | ✅ | Graines (G), Rebirth (R), Prestige (P, violet) empilés, menu ajusté à son contenu (`AutomaticSize`) |
+| Panneau sous les conditions | ✅ | « Prestiges réalisés : 0 · Primal Cores : 0 », conditions du prestige n° 1 : 0 / 5 rebirths, 0 / 10.0M Coins, « ×1 → ×1,58 », « Revenus : ×1 → ×1,58 », listes Perdu / Conservé, bouton gris « Conditions non remplies » |
+| Défaut d'affichage corrigé | ✅ | Ligne « Récompense : des Primal Cores (+25 % …) » trop longue (2 lignes, chevauchait la suivante, `TextFits = false`) → textes raccourcis dans `src/`, longueur vérifiée par aperçu à l'exécution (483 et 499 px pour 541 disponibles) ; tous les autres libellés `TextFits = true` |
+| 5 rebirths enchaînés | ✅ | Révision 5, Essence 1 111 (= 100 + 168 + 227 + 282 + 334), `prestigeCoins` 15 206 560 (= somme des seuils) |
+| Panneau éligible | ✅ | 5 / 5, 15.2M / 10.0M (100 %), « +10 Primal Cores », « Revenus : ×3,125 maintenant → ×1,58 juste après » |
+| Confirmation renforcée | ✅ | Récapitulatif chiffré (« dont 5 rebirths et 1.11K Mutation Essence », « +10 Primal Cores », « ×1,58 ») ; « Confirmer » cliqué à 0,25 s **puis à 3,3 s sans la case** : sans effet (révision 5, 0 Primal Core) ; case « ☑ J'ai compris … » (glyphe rendu, fond vert) → « Confirmer » rouge et actif |
+| Prestige n° 1 (reset et récompense) | ✅ | Avant : 2 750 Coins, Tomate sélectionnée, 1 drone, 7 objets. Après : `prestiges = 1`, `revision = 6`, Primal Cores 10, Essence 0, Coins 0, Carotte seule, aucun drone (0 ancre, 0 modèle), sac vide, parcelle `main`, 9 cases replantées, `cycleCoins = prestigeCoins = 0` ; notification « Prestige 1 ! +10 Primal Cores · multiplicateur de prestige ×1,58 » ; chat restauré |
+| Conservation | ✅ | `coinsEarned = 15 211 560`, `totalRebirths = 5`, `harvests = 18`, améliorations permanentes, quarantaine vide |
+| Panneaux après prestige | ✅ | Prestige : « Prestiges réalisés : 1 · Primal Cores : 10 », conditions n° 2 : 0 / 8, 0 / 100M, « ×1,58 → ×2,32 » ; Rebirth : « ×1,58 maintenant → ×2,156 après ce rebirth » (1,365 × 1,58 tronqué) |
+| Refus | ✅ | Révision périmée : ignorée sans message ; 0 rebirth : « Pas encore assez de rebirths pour un prestige. » ; charges invalides (`"6"`, NaN, 6,5, −1, 2⁴⁰, table) ignorées |
+| Multiplicateur de prestige à la vente | ✅ | 3 Carottes + 3 Carottes Brillantes (base 90) vendues **142** = ⌊90 × 1,58⌋, comptées dans les deux cycles |
+| Prestige n° 2 | ✅ | 8 rebirths (Essence 2 399), `prestigeCoins` 1,6 G ≥ 100 M : +16 Primal Cores (total 26), « ×2,32 » |
+| Requêtes croisées simultanées | ✅ | Rebirth n° 9 **et** prestige n° 2 tous deux possibles (révision 14) : 5 `PrestigeRequest(14)` + 5 `RebirthRequest(14)` dans la même image → **une seule** transition (prestige, révision 15, aucun rebirth appliqué : `totalRebirths` reste 13), une seule notification |
+| Touches manette (simulées) | ✅ partiel | `ButtonR1` ouvre le panneau Prestige (chat masqué), `ButtonB` ferme (chat restauré) ; sélection automatique et indices « R1 » / « B » non vérifiables (entrées simulées de type `Keyboard`) |
+| Casse du récapitulatif | ✅ (correctif) | `string.lower` donnait « mutation essence » : supprimé dans les deux panneaux après la passe (texte de même longueur ; non revu à l'écran) |
+| Persistance réelle d'un prestige | ⛔ non vérifiable | Store mémoire ; sauvegardes cohérentes couvertes **en simulation** (`Prestige.spec`), protocole §2.4 |
+| Mobile, vraie manette | ⛔ non vérifiable | Protocole §2.4 |
 
 ## 3. Studio MCP (opération manuelle, recommandée)
 

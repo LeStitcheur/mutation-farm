@@ -71,8 +71,19 @@ avance la Phase 5). Détail : `docs/PROGRESSION.md`.
       10 requêtes = 1 récompense, révision périmée refusée au seuil), manette simulée partielle
 - [ ] Manuel : persistance réelle d'un rebirth, mobile, manette (`docs/TESTING.md` §2.4)
 
-**Jalon B — Prestige**
-- [ ] PrestigeService, condition de prestige et gain de Primal Cores (structure `Resets.prestige` déjà testée), UI
+**Jalon B — Prestige ✅ (2026-11-21 ; validations manuelles restantes ci-dessous)**
+- [x] Conditions du cahier des charges (5 / 1e7, 8 / 1e8, 12 / 1e9) puis exponentielles et configurables,
+      `Mp(P) = 1 + 0,5 P + 0,08 P²`, Primal Cores (`ProgressionMath`, `ProgressionConfig.Prestige`)
+- [x] Transition atomique et idempotente `Resets.prestige` (révision ; parcelles, rebirths, Essence, améliorations de
+      rebirth et Coins des cycles réinitialisés ; droits Robux, Mutadex, cosmétiques, permanents conservés)
+- [x] `ProgressionService` (exécution commune, verrou partagé rebirth/prestige), `PrestigeService` ; `RebirthService`
+      ramené sur le même chemin
+- [x] Panneau Prestige (conditions, Primal Cores, multiplicateurs, perdu / conservé, confirmation renforcée : case
+      « J'ai compris » + 3 s ; P / R1 / B) sur `UI/ConfirmPanel`, commun avec le panneau Rebirth
+- [x] Tests Lune : 205 (dont `Prestige.spec`, 11 tests, et 8 tests de formules) ; invariant 12
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.6) : 2 prestiges complets, confirmation renforcée, vente ×1,58 = 142,
+      10 requêtes croisées rebirth/prestige = 1 transition ; 1 défaut d'affichage corrigé ; manette simulée partielle
+- [ ] Manuel : persistance réelle d'un prestige, mobile, manette (`docs/TESTING.md` §2.4)
 
 **Jalon C — Améliorations et équilibrage**
 - [ ] Arbres d'améliorations de rebirth (Mutation Essence) et permanentes (Primal Cores)
