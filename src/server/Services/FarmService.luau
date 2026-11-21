@@ -14,7 +14,7 @@ local Types = require(Shared.Types)
 local FarmLayout = require(Shared.Util.FarmLayout)
 local Signal = require(Shared.Util.Signal)
 local SlotAllocator = require(Shared.Util.SlotAllocator)
-local Upgrades = require(Shared.Util.Upgrades)
+local Bonuses = require(Shared.Util.Bonuses)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
 local MutationService = require(script.Parent.MutationService)
@@ -302,7 +302,7 @@ function FarmService.PlantTile(player: Player, tileId: string): boolean
 		return false
 	end
 	local plantId = PlantService.GetSelectedSeed(data)
-	local mutation = MutationService.Roll(Upgrades.luck(data))
+	local mutation = MutationService.Roll(Bonuses.luck(data))
 	local tile: TileState = {
 		plantId = plantId,
 		plantedAt = Workspace:GetServerTimeNow(),

@@ -306,3 +306,17 @@ Constats :
   à l'Efficacité des drones pour les joueurs actifs ; simuler les extensions de parcelle (Phase 4).
 - Limites du modèle : une seule parcelle (9 cases), joueur sans erreur ni pause, aucune extension, aucun événement ;
   les durées sont des ordres de grandeur, pas des promesses de temps de jeu réel.
+
+## 9. Familiers et plafonds globaux (Phase 4, jalon B ; détail : `docs/PETS.md`)
+
+- **Œufs** : Œuf de prairie 5 000 Coins (≈ 1 min 30 de revenu au stade Tomate), Œuf cristallin 75 000 Coins
+  (≈ 5 min au stade Citrouille), Œuf des missions non vendu. Les Coins sont remis à zéro au rebirth, les familiers
+  jamais : acheter un œuf retarde le déblocage de la graine suivante, c'est un choix assumé.
+- **Bonus** (3 familiers équipés, plafonnés par effet) : revenu ≤ +40 %, pousse ≤ −30 %, chance ≤ +0,60,
+  drones ≤ −30 %, précision manuelle ≤ +150 %. Le revenu des familiers multiplie celui des améliorations
+  (`Bonuses.valueMultiplier`, dans `ProgressionMath.incomeMultiplier`).
+- **Plafonds toutes sources** (`UpgradeConfig.Caps`, appliqués par `Util/Bonuses`) : pousse ≥ 40 % de la durée de
+  base, intervalle des drones ≥ 50 %, **chance totale ≤ 5**. Rendements de la chance (espérance du multiplicateur
+  de vente d'une culture) : E(1) = 1,505 ; E(2,5) = 1,98 ; E(3,1) ≈ 2,12 (améliorations + 2 Phalènes niveau 15) ;
+  E(5) ≈ 2,44 ; P(normale) ≥ 46 % au plafond (testé).
+- Non simulé : `tests/sim` ne modélise ni familiers ni événements ; les invariants restent ceux du §5.

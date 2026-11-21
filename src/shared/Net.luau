@@ -16,9 +16,14 @@ local Events = {
 	RebirthRequest = "RebirthRequest", -- révision de progression attendue (idempotence)
 	PrestigeRequest = "PrestigeRequest", -- révision de progression attendue (idempotence)
 	UpgradePurchase = "UpgradePurchase", -- identifiant d'amélioration + niveau attendu (idempotence)
+	PetHatch = "PetHatch", -- œuf + nombre d'éclosions attendu (idempotence) + œuf gratuit (booléen)
+	PetEquip = "PetEquip", -- identifiant d'instance
+	PetUnequip = "PetUnequip", -- identifiant d'instance
+	PetRelease = "PetRelease", -- identifiant d'instance (familier non équipé)
 	-- Serveur -> Client
 	StateSync = "StateSync",
 	HarvestResult = "HarvestResult",
+	PetHatched = "PetHatched", -- résultat d'éclosion, envoyé après la sauvegarde
 	Notify = "Notify",
 	LoadStatus = "LoadStatus",
 }

@@ -25,6 +25,12 @@ function ClientView.build(data: Types.PlayerData): Types.ClientState
 		upgrades = { rebirth = data.upgrades.rebirth, permanent = data.upgrades.permanent },
 		mutadex = data.mutadex,
 		mutadexRewards = data.mutadexRewards,
+		pets = {
+			instances = data.pets.instances,
+			equipped = data.pets.equipped,
+			hatched = data.pets.hatched,
+			freeEggs = data.pets.freeEggs,
+		},
 		harvests = data.stats.harvests,
 		perfectHarvests = data.stats.perfectHarvests,
 	}

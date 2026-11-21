@@ -6,6 +6,8 @@
 --   Invoke("snapshot", userId)            : copie JSON de la donnée serveur du joueur (inspection)
 --   Invoke("setTileMutation", userId, tileId, mutationId) : fixe la mutation d'une culture existante (tests du
 --                                           Mutadex par le vrai chemin de récolte)
+--   Invoke("grantEggs", userId, eggId, amount) : ajoute des œufs gratuits (tests des familiers, comme une
+--                                           récompense de mission)
 -- API : aucune.
 
 local HttpService = game:GetService("HttpService")
@@ -18,6 +20,7 @@ local MutationConfig = require(ReplicatedStorage.Shared.Config.MutationConfig)
 local BigNum = require(ReplicatedStorage.Shared.Util.BigNum)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
+local PetService = require(script.Parent.PetService)
 
 local MAX_GRANT = 1e15
 
@@ -53,6 +56,11 @@ local function invoke(command: unknown, userId: unknown, amount: unknown, extra:
 			end
 		end)
 		return applied
+	elseif command == "grantEggs" then
+		if type(amount) ~= "string" or type(extra) ~= "number" or extra ~= extra or extra < 1 then
+			return false
+		end
+		return PetService.GrantFreeEggs(player, amount, extra)
 	end
 	return nil
 end

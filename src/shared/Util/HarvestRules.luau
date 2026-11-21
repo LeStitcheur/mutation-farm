@@ -14,6 +14,8 @@ local Inventory = require(script.Parent.Inventory)
 local ProgressionMath = require(script.Parent.ProgressionMath)
 local Mutadex = require(script.Parent.Mutadex)
 local MutadexConfig = require(script.Parent.Parent.Config.MutadexConfig)
+local Bonuses = require(script.Parent.Bonuses)
+local Pets = require(script.Parent.Pets)
 
 type PlayerData = Types.PlayerData
 
@@ -27,6 +29,7 @@ export type Outcome = {
 	itemKey: string,
 	discovered: boolean, -- première récolte de cette combinaison (Mutadex)
 	milestones: { MutadexConfig.MilestoneDef }, -- paliers du Mutadex accordés par cette découverte
+	petLevelUps: { Pets.LevelUp }, -- familiers équipés passés au niveau supérieur (XP de cette récolte)
 }
 
 local HarvestRules = {}
@@ -65,13 +68,18 @@ function HarvestRules.apply(data: PlayerData, tileId: string, now: number, sourc
 		data.stats.perfectHarvests += 1
 	end
 	data.farm.tiles[tileId] = nil
-	-- Bonus de précision × multiplicateur de revenu (rebirth…), appliqué une seule fois puis tronqué.
+	-- Bonus de précision (récolte manuelle uniquement) × multiplicateur de revenu (rebirth…) × familiers de
+	-- précision, appliqué une seule fois puis tronqué.
 	local bonus = if tier == "normal"
 		then BigNum.zero()
-		else BigNum.mulNumber(Economy.precisionBonus(tile.plantId, tier), ProgressionMath.incomeMultiplier(data))
-	-- Mutadex : même mutateur que la récolte (joueur ou drone) → une culture est comptée une seule fois.
+		else BigNum.mulNumber(
+			Economy.precisionBonus(tile.plantId, tier),
+			ProgressionMath.incomeMultiplier(data) * Bonuses.manualMultiplier(data)
+		)
+	-- Mutadex et XP des familiers : même mutateur que la récolte (joueur ou drone) → une culture compte une fois.
 	local discovered = Mutadex.record(data, tile.plantId, mutation, now)
 	local milestones = if discovered then Mutadex.claimMilestones(data, now) else {}
+	local petLevelUps = Pets.grantXp(data, Pets.harvestXp(source, tier))
 	return {
 		plantId = tile.plantId,
 		mutation = mutation,
@@ -80,6 +88,7 @@ function HarvestRules.apply(data: PlayerData, tileId: string, now: number, sourc
 		itemKey = key,
 		discovered = discovered,
 		milestones = milestones,
+		petLevelUps = petLevelUps,
 	}
 end
 

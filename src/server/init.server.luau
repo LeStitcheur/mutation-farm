@@ -20,6 +20,7 @@ local ProgressionService = require(Services.ProgressionService)
 local RebirthService = require(Services.RebirthService)
 local PrestigeService = require(Services.PrestigeService)
 local UpgradeService = require(Services.UpgradeService)
+local PetService = require(Services.PetService)
 local DevService = require(Services.DevService)
 local SyncService = require(Services.SyncService)
 
@@ -43,6 +44,7 @@ local ordered: { { name: string, service: Service } } = {
 	{ name = "RebirthService", service = RebirthService },
 	{ name = "PrestigeService", service = PrestigeService },
 	{ name = "UpgradeService", service = UpgradeService },
+	{ name = "PetService", service = PetService },
 	{ name = "DevService", service = DevService }, -- Studio uniquement (outils de test MCP)
 	{ name = "SyncService", service = SyncService },
 	{ name = "DataService", service = DataService },

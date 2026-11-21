@@ -9,6 +9,7 @@ local BigNum = require(script.Parent.BigNum)
 local Inventory = require(script.Parent.Inventory)
 local Upgrades = require(script.Parent.Upgrades)
 local Mutadex = require(script.Parent.Mutadex)
+local Bonuses = require(script.Parent.Bonuses)
 
 type BigNum = Types.BigNum
 type PlayerData = Types.PlayerData
@@ -80,11 +81,12 @@ function Economy.bagCapacity(data: PlayerData): number
 	return GameConfig.Bag.BaseCapacity + Upgrades.bagBonus(data) + Mutadex.bagBonus(data)
 end
 
--- Durée de pousse effective d'une nouvelle culture (figée à la plantation) : base × améliorations de croissance.
+-- Durée de pousse effective d'une nouvelle culture (figée à la plantation) : base × bonus de croissance
+-- (améliorations × familiers, plafonnés : Util/Bonuses).
 function Economy.growTime(data: PlayerData, plantId: string): number
 	local plant = PlantConfig.get(plantId)
 	assert(plant, "Economy.growTime : plante inconnue " .. plantId)
-	return plant.growTime * Upgrades.growthFactor(data)
+	return plant.growTime * Bonuses.growthFactor(data)
 end
 
 function Economy.bagCount(data: PlayerData): number

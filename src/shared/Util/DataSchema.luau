@@ -9,6 +9,7 @@ local PlantConfig = require(script.Parent.Parent.Config.PlantConfig)
 local MutationConfig = require(script.Parent.Parent.Config.MutationConfig)
 local UpgradeConfig = require(script.Parent.Parent.Config.UpgradeConfig)
 local MutadexConfig = require(script.Parent.Parent.Config.MutadexConfig)
+local PetConfig = require(script.Parent.Parent.Config.PetConfig)
 local BigNum = require(script.Parent.BigNum)
 local Deep = require(script.Parent.Deep)
 local Economy = require(script.Parent.Economy)
@@ -18,8 +19,9 @@ local FarmLayout = require(script.Parent.FarmLayout)
 type PlayerData = Types.PlayerData
 type Migration = (any) -> any
 
-local VERSION = 3
+local VERSION = 4
 local MAX_DEPTH = 16
+local MAX_LEGACY_PETS = 1000 -- v1–v3 : au-delà, un compteur d'exemplaires est jugé corrompu (laissé tel quel)
 
 -- Copie défensive d'un BigNum stocké (zéro si absent ou corrompu).
 local function storedBigNum(value: any): any
@@ -59,6 +61,69 @@ local MIGRATIONS: { [number]: Migration } = {
 				end
 			end
 		end
+		return data
+	end,
+	-- v4 (Phase 4, familiers) : instances uniques { petId, level, xp, obtainedAt }, compteur d'éclosions, œufs
+	-- gratuits. L'ancien contrat (`owned` = exemplaires par espèce, `equipped` = espèces) n'a jamais été écrit par le
+	-- jeu ; s'il existe, chaque exemplaire devient une instance de niveau 1 et les espèces équipées sont reportées
+	-- sur ces instances. Rien n'est supprimé : `owned` reste stocké tel quel et l'ancienne liste équipée est copiée
+	-- dans `pets.legacyEquipped`.
+	[4] = function(data: any): any
+		local pets = data.pets
+		if type(pets) ~= "table" or pets.instances ~= nil then
+			return data -- table recréée par la réconciliation, ou déjà au nouveau format
+		end
+		local meta = data.meta
+		local createdAt = if type(meta) == "table"
+				and type(meta.createdAt) == "number"
+				and meta.createdAt >= 0
+			then meta.createdAt
+			else 0
+		local instances: { [string]: any } = {}
+		local bySpecies: { [string]: { string } } = {}
+		local serial = 0
+		if type(pets.owned) == "table" then
+			local species: { string } = {}
+			for petId, count in pets.owned do
+				if
+					type(petId) == "string"
+					and type(count) == "number"
+					and count >= 1
+					and count % 1 == 0
+					and count <= MAX_LEGACY_PETS
+				then
+					table.insert(species, petId)
+				end
+			end
+			table.sort(species)
+			for _, petId in species do
+				local pool: { string } = {}
+				for _ = 1, pets.owned[petId] do
+					serial += 1
+					local id = "p" .. serial
+					instances[id] = { petId = petId, level = 1, xp = 0, obtainedAt = createdAt }
+					table.insert(pool, id)
+				end
+				bySpecies[petId] = pool
+			end
+		end
+		local equipped: { string } = {}
+		if type(pets.equipped) == "table" then
+			if next(pets.equipped) ~= nil then
+				pets.legacyEquipped = Deep.copy(pets.equipped)
+			end
+			for _, petId in pets.equipped do
+				local pool = if type(petId) == "string" then bySpecies[petId] else nil
+				if pool and #pool > 0 and #equipped < PetConfig.Slots then
+					table.insert(equipped, table.remove(pool, 1) :: string)
+				end
+			end
+		end
+		pets.instances = instances
+		pets.equipped = equipped
+		pets.nextSerial = serial + 1
+		pets.hatched = 0
+		pets.freeEggs = {}
 		return data
 	end,
 }
@@ -111,6 +176,10 @@ function DataSchema.template(now: number): PlayerData
 		pets = {
 			owned = {},
 			equipped = {},
+			instances = {},
+			nextSerial = 1,
+			hatched = 0,
+			freeEggs = {},
 		},
 		stats = {
 			harvests = 0,
@@ -363,6 +432,73 @@ function DataSchema.sanitize(data: PlayerData, now: number?): { string }
 		elseif not knownMilestones[key] then
 			table.insert(notes, "Mutadex : palier hors configuration conservé en sommeil (" .. key .. ")")
 		end
+	end
+
+	-- Familiers (Phase 4, jalon B) : instances « p<n> » bien formées ; espèce retirée de la configuration =
+	-- conservée en sommeil (ni active ni équipable) ; niveau au-delà du maximum plafonné ; liste équipée valide.
+	local pets = raw.pets
+	local maxSerial = 0
+	for key, value in pets.instances do
+		local number = if type(key) == "string" then tonumber(string.match(key, "^p(%d+)$")) else nil
+		if number then
+			maxSerial = math.max(maxSerial, number) -- y compris une instance mise en quarantaine : jamais réutilisé
+		end
+		local valid = number ~= nil
+			and type(value) == "table"
+			and type(value.petId) == "string"
+			and #value.petId <= PetConfig.MaxIdLength
+			and isNonNegativeInteger(value.level)
+			and value.level >= 1
+			and isNonNegativeInteger(value.xp)
+			and isTimestamp(value.obtainedAt)
+		if not valid then
+			pets.instances[key] = nil
+			quarantine(data, notes, "pets.instances." .. tostring(key), value, "familier invalide", at)
+		else
+			if value.level > PetConfig.Level.Max then
+				local path = "pets.instances." .. key .. ".level"
+				quarantine(data, notes, path, value.level, "au-delà du niveau maximum -> plafonné", at)
+				value.level = PetConfig.Level.Max
+				value.xp = 0
+			elseif PetConfig.ById[value.petId] == nil then
+				table.insert(notes, "Familiers : espèce hors configuration conservée en sommeil (" .. key .. ")")
+			end
+		end
+	end
+	-- Numéros d'instance jamais réutilisés : le compteur reste strictement au-dessus du plus grand numéro connu.
+	if not isNonNegativeInteger(pets.nextSerial) or pets.nextSerial <= maxSerial then
+		table.insert(notes, string.format("pets.nextSerial : %s -> %d", tostring(pets.nextSerial), maxSerial + 1))
+		pets.nextSerial = maxSerial + 1
+	end
+	if not isNonNegativeInteger(pets.hatched) then
+		quarantine(data, notes, "pets.hatched", pets.hatched, "compteur d'éclosions invalide -> 0", at)
+		pets.hatched = 0
+	end
+	for key, value in pets.freeEggs do
+		if type(key) ~= "string" or not isNonNegativeInteger(value) then
+			pets.freeEggs[key] = nil
+			quarantine(data, notes, "pets.freeEggs." .. tostring(key), value, "œufs gratuits invalides", at)
+		elseif value > PetConfig.MaxFreeEggs then
+			quarantine(data, notes, "pets.freeEggs." .. key, value, "au-delà de la réserve maximale -> plafonné", at)
+			pets.freeEggs[key] = PetConfig.MaxFreeEggs
+		end
+	end
+	-- Liste équipée : instances existantes d'espèces actives, sans doublon, au plus PetConfig.Slots. Une liste
+	-- corrigée est mise en quarantaine telle quelle (aucun familier n'est perdu : seul l'équipement change).
+	local cleaned: { string } = {}
+	local changed = false
+	for _, id in pets.equipped do
+		local instance = if type(id) == "string" then pets.instances[id] else nil
+		local active = instance ~= nil and PetConfig.ById[instance.petId] ~= nil
+		if active and not table.find(cleaned, id) and #cleaned < PetConfig.Slots then
+			table.insert(cleaned, id)
+		else
+			changed = true
+		end
+	end
+	if changed or #cleaned ~= #pets.equipped then
+		quarantine(data, notes, "pets.equipped", pets.equipped, "familiers équipés invalides -> retirés", at)
+		pets.equipped = cleaned
 	end
 
 	-- Compteurs.

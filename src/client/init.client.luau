@@ -16,7 +16,9 @@ local RebirthController = require(Controllers.RebirthController)
 local PrestigeController = require(Controllers.PrestigeController)
 local UpgradeController = require(Controllers.UpgradeController)
 local MutadexController = require(Controllers.MutadexController)
+local PetController = require(Controllers.PetController)
 local PlantRenderer = require(Controllers.PlantRenderer)
+local PetRenderer = require(Controllers.PetRenderer)
 local HarvestController = require(Controllers.HarvestController)
 local DroneRenderer = require(Controllers.DroneRenderer)
 
@@ -32,9 +34,11 @@ local ordered: { Controller } = {
 	PrestigeController,
 	UpgradeController,
 	MutadexController,
+	PetController,
 	PlantRenderer,
 	HarvestController,
 	DroneRenderer,
+	PetRenderer,
 }
 
 for _, controller in ordered do

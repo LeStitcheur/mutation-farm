@@ -120,6 +120,21 @@ Simulations Lune également (pas de validation du vrai DataStore).
 - `EconomySim.spec` : détection du rebirth suivant le prestige corrigée (rebirth effectué, pas éligibilité
   transitoire) ; modèle du joueur affiné (`docs/ECONOMY.md` §8).
 
+### Ce qui est couvert hors Studio pour les familiers (Phase 4, jalon B)
+- `Pets.spec` (20 tests) : **probabilités** affichées = poids / somme (somme 1, espèces connues, aucun œuf en Robux,
+  Œuf des missions non vendu) ; **tirage** exact sur une grille uniforme de 20 000 aléas ; **achat** en Coins
+  (paiement, instance `p1` niveau 1, compteur) ; **fonds insuffisants**, œuf inconnu, œuf non vendu sans effet ;
+  **œuf gratuit** (consommé, réserve vide refusée, réserve plafonnée) ; **inventaire plein** refusé avant paiement ;
+  **double clic / rejeu** (révision périmée : un seul œuf, un seul paiement) ; **identifiants jamais réutilisés** ;
+  **équipement** (3 emplacements, double équipement, relâcher un équipé refusé) ; tri, doublons, espèce en
+  sommeil ; **bonus** par niveau, **cumul plafonné**, effet réel sur la pousse, le revenu, la chance, les drones et
+  la précision manuelle (drone sans bonus) ; **plafonds globaux** (P(normale) ≥ 46 % à la chance maximale) ;
+  **XP** exponentielle et niveau plafonné ; XP des **récoltes manuelles et de drones** aux seuls équipés ;
+  **rebirth et prestige** sans effet ; **sauvegarde/rechargement** ; **migration v3 -> v4** ; **données
+  malformées** (quarantaine, sommeil, niveau plafonné, compteur et équipement corrigés).
+- Concurrence côté serveur : un seul mutateur par éclosion (`Pets.hatch`), drapeau « éclosion en sauvegarde » et
+  débit 1 / 3 s dans `PetService` (validés en Studio, `docs/TESTING.md` §2.9).
+
 ### Ce qui n'est PAS couvert automatiquement
 Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
 → checklist ci-dessous, déroulée via Studio MCP (§3) ; ce qui exige un humain reste marqué comme tel.
@@ -255,6 +270,8 @@ fenêtres de test sont visibles par le MCP). Ne cocher qu'après exécution rée
 | **Améliorations : manette** (Phase 3) | Manette branchée | L2 ouvre le panneau, onglet sélectionné ; croix pour passer d'un onglet aux lignes, A achète (niveau + 1, solde mis à jour), B ferme |
 | **Améliorations : persistance réelle** (Phase 3) | Comme « Sauvegarde réelle » | Niveaux achetés restaurés après Stop / Play ; améliorations Essence perdues et permanentes conservées après un prestige réel |
 | **Mutadex : persistance réelle** (Phase 4) | Comme « Sauvegarde réelle » | Découvertes, compteurs, dates et paliers restaurés après Stop / Play et après un changement de serveur ; ancienne sauvegarde v2 migrée sans perte |
+| **Familiers : persistance réelle** (Phase 4) | Comme « Sauvegarde réelle » | Éclosion puis arrêt brutal du serveur : le familier est présent au retour (sauvegarde avant confirmation) ; équipement, niveaux et œufs gratuits restaurés après changement de serveur |
+| **Familiers : performance mobile** (Phase 4) | Appareil d'entrée de gamme, 3 familiers équipés, plusieurs joueurs | Images par seconde stables, familiers qui suivent sans saccade, aucune erreur ; panneau Familiers lisible (*Test › Device*) ; manette : L3 ouvre, B ferme |
 | **Mutadex : mobile et manette** (Phase 4) | *Test › Device* ; manette branchée | Menu en grille lisible sans chevauchement avec le chat ; panneau ajusté, cartes défilables au doigt ; R2 ouvre, croix pour parcourir filtres et cartes (défilement automatique), B ferme |
 
 ### 2.5 Phase 3, jalon A (rebirth) — validation Studio MCP du 2026-11-21 (Play solo, API désactivée)

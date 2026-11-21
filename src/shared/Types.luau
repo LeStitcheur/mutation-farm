@@ -60,8 +60,12 @@ export type PlayerData = {
 		equipped: { [string]: string },
 	},
 	pets: {
-		owned: { [string]: number },
-		equipped: { string },
+		owned: { [string]: number }, -- obsolète (contrat v1 jamais écrit par le jeu), conservé tel quel depuis la v4
+		equipped: { string }, -- v4 : identifiants d'INSTANCES équipées (≤ PetConfig.Slots), sans doublon
+		instances: { [string]: PetInstance }, -- v4 : familiers possédés, identifiant unique « p<n> »
+		nextSerial: number, -- v4 : prochain numéro d'instance (jamais réutilisé)
+		hatched: number, -- v4 : œufs ouverts (révision attendue : idempotence des éclosions)
+		freeEggs: { [string]: number }, -- v4 : œufs gagnés (missions, objectifs) non ouverts, par type
 	},
 	stats: {
 		harvests: number,
@@ -83,6 +87,30 @@ export type PlayerData = {
 export type MutadexEntry = {
 	firstAt: number,
 	count: number,
+}
+
+-- Familier possédé (Phase 4, jalon B). Jamais réinitialisé.
+export type PetInstance = {
+	petId: string, -- espèce (PetConfig)
+	level: number, -- 1 … PetConfig.Level.Max
+	xp: number, -- XP vers le niveau suivant (0 au niveau maximum)
+	obtainedAt: number, -- horodatage serveur Unix
+}
+
+-- Familiers répliqués au client (panneau, aperçus des bonus).
+export type ClientPets = {
+	instances: { [string]: PetInstance },
+	equipped: { string },
+	hatched: number,
+	freeEggs: { [string]: number },
+}
+
+-- Résultat d'une éclosion, envoyé APRÈS la tentative de sauvegarde (PetHatched).
+export type HatchResult = {
+	eggId: string,
+	instanceId: string,
+	petId: string,
+	saved: boolean, -- false : écriture différée (stockage indisponible) ; le familier reste acquis en mémoire
 }
 
 -- Donnée inconnue ou incompatible mise de côté au chargement (jamais supprimée silencieusement).
@@ -111,6 +139,7 @@ export type ClientState = {
 	upgrades: { rebirth: { [string]: number }, permanent: { [string]: number } }, -- niveaux (panneau Améliorations)
 	mutadex: { [ItemKey]: MutadexEntry },
 	mutadexRewards: { [string]: number },
+	pets: ClientPets,
 	harvests: number,
 	perfectHarvests: number,
 }

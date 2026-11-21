@@ -121,7 +121,20 @@ non fusionnée).
 - [ ] Validation Studio MCP (`docs/TESTING.md` §2.8) — en attente de la connexion du plugin Rojo
 - [ ] Manuel : persistance réelle, mobile, manette (`docs/TESTING.md` §2.4)
 
-**Jalon B — Familiers** · **Jalon C — Événements dynamiques** · **Jalon D — Missions** : à venir.
+**Jalon B — Familiers (implémenté, validation Studio en attente)**
+- [x] 6 espèces originales (croissance, valeur, chance, drones, récolte manuelle, général), raretés, bonus par niveau
+- [x] Œufs en Coins (prairie, cristallin) et gratuits (missions) ; probabilités affichées ; tirage serveur ; aucun
+      œuf en Robux ; éclosion atomique, idempotente et **sauvegardée avant confirmation**
+- [x] Inventaire (50, tri, doublons), 3 emplacements, relâchement confirmé ; identifiants d'instance uniques
+- [x] XP des récoltes validées (joueur et drones) dans le mutateur de récolte, coût exponentiel, niveau 15
+- [x] Bonus cumulés plafonnés par effet + plafonds globaux toutes sources (`Util/Bonuses`)
+- [x] Modèles stylisés suivant le propriétaire (interpolation locale, animations, rendu mobile économe)
+- [x] Schéma v4 + migration v3 -> v4 ; jamais réinitialisés (rebirth, prestige)
+- [x] Tests Lune : 266 (dont `Pets.spec` 20)
+- [ ] Validation Studio MCP (`docs/TESTING.md` §2.9) — en attente de la connexion du plugin Rojo
+- [ ] Manuel : persistance réelle, performance mobile, manette (`docs/TESTING.md` §2.4)
+
+**Jalon C — Événements dynamiques** · **Jalon D — Missions** : à venir.
 
 ## Phase 5 — Croissance de la ferme et automatisation (ex-Phase 4, replanifiée)
 - [ ] Améliorations normales (vitesse, valeur, sac) — UpgradeService + UI

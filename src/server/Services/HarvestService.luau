@@ -4,7 +4,8 @@
 -- pour le joueur seulement ; replantation automatique (nouveau tirage de mutation).
 -- Anti-duplication : la validation est REFAITE puis appliquée dans le même mutateur synchrone (HarvestRules),
 -- donc un joueur et un drone ne peuvent jamais récolter deux fois la même culture.
--- API : Harvest (joueur), HarvestForDrone (DroneService).
+-- API : Harvest (joueur), HarvestForDrone (DroneService) ; signal Harvested(player, outcome, source) émis après
+-- chaque récolte validée (familiers : passages de niveau ; missions : progression).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -18,6 +19,7 @@ local BigNum = require(Shared.Util.BigNum)
 local DroneLogic = require(Shared.Util.DroneLogic)
 local FarmLayout = require(Shared.Util.FarmLayout)
 local HarvestRules = require(Shared.Util.HarvestRules)
+local Signal = require(Shared.Util.Signal)
 local Net = require(Shared.Net)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
@@ -39,7 +41,9 @@ local MAX_TILE_ID_LENGTH = 32
 
 local limiter = RateLimiter.new(GameConfig.Harvest.RequestsPerSecond)
 
-local HarvestService = {}
+local HarvestService = {
+	Harvested = Signal.new() :: Signal.Signal<Player, HarvestRules.Outcome, Types.HarvestSource>,
+}
 
 local function isCharacterNear(player: Player, part: BasePart): boolean
 	local character = player.Character
@@ -127,6 +131,7 @@ local function harvest(
 	}
 	Net.event(Net.Events.HarvestResult):FireClient(player, payload)
 	MutadexService.OnHarvest(player, result.plantId, result.mutation, result.discovered, result.milestones)
+	HarvestService.Harvested:Fire(player, result, source)
 	local mutationDef = MutationConfig.get(result.mutation)
 	local plant = PlantConfig.get(result.plantId)
 	if mutationDef and plant and mutationDef.multiplier >= GameConfig.Mutations.NotifyMinMultiplier then
