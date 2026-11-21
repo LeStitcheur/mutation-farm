@@ -47,7 +47,9 @@ et versionné (commit/tag Git). Pas de développement simultané de plusieurs sy
 - [x] Simulation manuel vs drones (`docs/ECONOMY.md` §7), tests Lune + validation Studio MCP (`docs/TESTING.md` §2.3)
 - [x] Délai de grâce de 5 s (`graceDelay`) : les drones ne visent que les plantes mûres depuis 5 s, les bonus restent
       au joueur (Tomate + 1 drone : −3 % → +1 % ; contrepartie chiffrée dans `docs/ECONOMY.md` §7)
-- [ ] Manuel : station à 2 joueurs, 3ᵉ drone, persistance réelle de la flotte, station au toucher et à la manette
+- [x] 3ᵉ drone : coût exact (9 375), plafond (« Complet », 4ᵉ achat refusé), affichage (2026-11-21, Studio MCP)
+- [ ] Manuel (protocole `docs/TESTING.md` §2.4) : station à 2 joueurs, reconnexion, persistance réelle de la flotte,
+      station au toucher et à la manette
 
 ## Phase 3 — Croissance de la ferme
 - [ ] Améliorations normales (vitesse, valeur, sac) — UpgradeService + UI

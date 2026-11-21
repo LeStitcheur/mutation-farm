@@ -163,9 +163,22 @@ Coins gagnés en jouant (aucun crédit de test).
 | Anti-triche manuel avec drones actifs | ✅ | 200 requêtes + entrées invalides sur une case mûre → 1 récolte, 1 replantation |
 | Non-régression | ✅ | Récolte, vente, déblocage Tomate (« Tomate débloquée ! … »), mutations, drones sur Tomate |
 | Station réservée au propriétaire | ⛔ non vérifiable | Exige un 2ᵉ joueur ; vérifié à la lecture du code (`buyer ~= player` → refus) |
-| 3ᵉ drone / invite « Complet » | ⛔ non joué | 9 375 Coins requis ; maximum couvert en Lune (`Drones.spec`) |
+| 3ᵉ drone / invite « Complet » | ✅ (2026-11-21) | Coins gagnés en jouant (Tomate + drones). À 8 020 : « Pas assez de Coins pour ce drone. » ; solde exact 11 089 → 1 714 (−9 375) ; « Drone récolteur acheté ! (3/3) » ; invite « Complet / Drone récolteur · 3/3 » ; 3 drones centrés (x = −201, −195, −189), 3 modèles client ; 4ᵉ tentative : « Tu possèdes déjà le maximum de ce drone. », solde inchangé |
 | Persistance réelle de la flotte | ⛔ non vérifiable | Pas d'accès DataStore ; couvert en Lune (`Drones.spec`, `SessionLock.spec`) |
 | Station au toucher / à la manette | ⛔ non vérifiable | ProximityPrompt standard (tactile et ButtonX natifs) ; à contrôler avec l'émulateur et une vraie manette |
+
+### 2.4 Protocole des validations restantes (intervention humaine requise)
+
+Chaque ligne : préparation **par un humain** dans Studio, puis contrôles (à la main ou par Claude via Studio MCP si les
+fenêtres de test sont visibles par le MCP). Ne cocher qu'après exécution réelle.
+
+| Validation | Préparation (humain) | Contrôles et résultat attendu |
+|---|---|---|
+| **2 joueurs réels** (ligne 13 + station) | *Test › Clients and Servers*, 2 joueurs, Start | Deux parcelles distinctes (`Plot_1`, `Plot_2`) ; chacun voit plantes et drones de l'autre ; aucune invite de récolte sur la parcelle de l'autre ; joueur B à la station de A : « Cette station appartient à une autre ferme. », solde de B inchangé ; les drones de A ne récoltent que chez A (sac de B inchangé) |
+| **Reconnexion (même serveur)** | Pendant le test à 2 joueurs : fermer la fenêtre du joueur B puis *Add Player* | B retrouve Coins, sac, graines, drones et cultures (store mémoire du serveur) ; un seul jeu de drones ; aucune duplication de Coins ni d'objets |
+| **Sauvegarde réelle** (ligne 12 + drones) | Publier la place (privée) **avec accord**, *Game Settings › Security › Enable Studio Access to API Services*, rouvrir | Plus d'avertissement « MÉMOIRE » ; Stop puis Play : Coins, sac, graines, mutations des cultures et nombre de drones restaurés ; drones recréés une seule fois ; pas de duplication |
+| **Mobile** (ligne 14 + station) | *Test › Device* : un téléphone (ex. iPhone), relancer Play | HUD lisible sans chevauchement ; invites de récolte, de vente et de la station utilisables au toucher (appui long 0,4 s sur la station) ; panneau Graines ajusté à l'écran ; chat ouvert vs bouton Graines |
+| **Manette** (ligne 15 + station) | Brancher une manette (ou émulateur de manette de Studio) | Y ouvre le panneau avec sélection auto du 1ᵉʳ bouton, croix directionnelle pour naviguer, A pour valider, B pour fermer ; invites (récolte, vente, station) déclenchées par X |
 
 ## 3. Studio MCP (opération manuelle, recommandée)
 
