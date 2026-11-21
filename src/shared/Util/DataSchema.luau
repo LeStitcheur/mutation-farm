@@ -7,6 +7,7 @@ local DroneConfig = require(script.Parent.Parent.Config.DroneConfig)
 local GameConfig = require(script.Parent.Parent.Config.GameConfig)
 local PlantConfig = require(script.Parent.Parent.Config.PlantConfig)
 local MutationConfig = require(script.Parent.Parent.Config.MutationConfig)
+local UpgradeConfig = require(script.Parent.Parent.Config.UpgradeConfig)
 local BigNum = require(script.Parent.BigNum)
 local Deep = require(script.Parent.Deep)
 local Economy = require(script.Parent.Economy)
@@ -263,6 +264,28 @@ function DataSchema.sanitize(data: PlayerData, now: number?): { string }
 		elseif count > def.maxOwned then
 			quarantine(data, notes, "machines.drones." .. droneId, count, "au-delà du maximum -> plafonné", at)
 			data.machines.drones[droneId] = def.maxOwned
+		end
+	end
+
+	-- Améliorations des arbres Essence (upgrades.rebirth) et Primal Cores (upgrades.permanent) : identifiants connus
+	-- dans le bon arbre, niveaux entiers ≥ 1, plafonnés au maximum. upgrades.normal : pas encore de catalogue.
+	for _, tree in UpgradeConfig.Trees do
+		local container = (data.upgrades :: any)[tree.storage]
+		if type(container) ~= "table" then
+			quarantine(data, notes, "upgrades." .. tree.storage, container, "liste d'améliorations invalide", at);
+			(data.upgrades :: any)[tree.storage] = {}
+			continue
+		end
+		for upgradeId, level in container do
+			local def = if type(upgradeId) == "string" then UpgradeConfig.ById[upgradeId] else nil
+			local path = "upgrades." .. tree.storage .. "." .. tostring(upgradeId)
+			if not def or def.tree ~= tree.id or not isNonNegativeInteger(level) or level == 0 then
+				container[upgradeId] = nil
+				quarantine(data, notes, path, level, "amélioration inconnue ou niveau invalide", at)
+			elseif level > def.maxLevel then
+				quarantine(data, notes, path, level, "au-delà du niveau maximum -> plafonné", at)
+				container[upgradeId] = def.maxLevel
+			end
 		end
 	end
 

@@ -39,11 +39,9 @@ function PlantService.GetSelectedSeed(data: PlayerData): string
 	return GameConfig.StarterSeed
 end
 
--- Durée de pousse effective, figée à la plantation. Phase 3 : améliorations et événements.
-function PlantService.ComputeGrowTime(_data: PlayerData, plantId: string): number
-	local plant = PlantConfig.get(plantId)
-	assert(plant, "PlantService.ComputeGrowTime : plante inconnue " .. plantId)
-	return plant.growTime
+-- Durée de pousse effective, figée à la plantation (améliorations de croissance : Economy.growTime).
+function PlantService.ComputeGrowTime(data: PlayerData, plantId: string): number
+	return Economy.growTime(data, plantId)
 end
 
 function PlantService.UnlockSeed(player: Player, plantId: string): (boolean, string?)

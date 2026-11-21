@@ -12,14 +12,22 @@ local MutationRoll = require(Shared.Util.MutationRoll)
 local MutationOdds = require(script.Parent.Parent.Config.MutationOdds)
 
 local rng = Random.new()
--- Chance de base (événements et améliorations de chance : phases ultérieures).
+-- Chance de base ; la chance du joueur (améliorations, plafonnée par Upgrades.luck) la multiplie.
 local weights = MutationRoll.applyLuck(MutationOdds.Weights, MutationOdds.Luck.Base)
+local weightsByLuck: { [number]: typeof(weights) } = { [1] = weights }
 
 local MutationService = {}
 
 -- Mutation de la prochaine culture : identifiant de MutationConfig (MutationConfig.NORMAL le plus souvent).
-function MutationService.Roll(): string
-	return MutationRoll.pick(weights, rng:NextNumber())
+-- `luck` (≥ 1, calculée par le serveur à partir des améliorations) multiplie les poids non normaux.
+function MutationService.Roll(luck: number?): string
+	local factor = if luck and luck == luck and luck > 0 then luck else 1
+	local scaled = weightsByLuck[factor]
+	if not scaled then
+		scaled = MutationRoll.applyLuck(MutationOdds.Weights, MutationOdds.Luck.Base * factor)
+		weightsByLuck[factor] = scaled
+	end
+	return MutationRoll.pick(scaled, rng:NextNumber())
 end
 
 function MutationService.Init()

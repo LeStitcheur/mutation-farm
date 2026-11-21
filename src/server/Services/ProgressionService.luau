@@ -24,6 +24,11 @@ local busy: { [Player]: boolean } = {}
 
 local ProgressionService = {}
 
+-- Une transition est-elle en cours pour ce joueur ? (les achats d'améliorations attendent sa fin)
+function ProgressionService.IsBusy(player: Player): boolean
+	return busy[player] == true
+end
+
 -- Révision envoyée par le client : entier fini dans [0, 2^31[.
 function ProgressionService.IsValidRevision(value: unknown): boolean
 	if typeof(value) ~= "number" then

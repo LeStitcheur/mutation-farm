@@ -9,6 +9,7 @@ local GameConfig = require(script.Parent.Parent.Config.GameConfig)
 local BigNum = require(script.Parent.BigNum)
 local FarmLayout = require(script.Parent.FarmLayout)
 local ProgressionMath = require(script.Parent.ProgressionMath)
+local Upgrades = require(script.Parent.Upgrades)
 
 type PlayerData = Types.PlayerData
 type BigNum = Types.BigNum
@@ -35,13 +36,21 @@ local Resets = {}
 
 -- Économie du cycle : Coins, graines, sac, améliorations normales, drones, cultures (les cases sont replantées
 -- par le serveur), Coins gagnés pendant le cycle de rebirth.
+-- Améliorations permanentes appliquées au nouveau cycle : Héritage agricole (graines gardées, la meilleure
+-- sélectionnée) et Automatisation primordiale (drones offerts).
 local function resetEconomy(data: PlayerData)
 	data.currencies.coins = BigNum.zero()
-	data.seeds.unlocked = { [GameConfig.StarterSeed] = true }
-	data.seeds.selected = GameConfig.StarterSeed
+	local legacy = Upgrades.legacySeeds(data)
+	local unlocked: { [string]: boolean } = {}
+	for _, plantId in legacy do
+		unlocked[plantId] = true
+	end
+	data.seeds.unlocked = unlocked
+	data.seeds.selected = legacy[#legacy] or GameConfig.StarterSeed
 	data.bag.items = {}
 	data.upgrades.normal = {}
 	data.machines.drones = {}
+	Upgrades.grantStartingDrones(data)
 	data.farm.tiles = {}
 	data.progression.cycleCoins = BigNum.zero()
 end
@@ -59,7 +68,8 @@ function Resets.rebirth(data: PlayerData, expectedRevision: number): (RebirthOut
 	if not eligible then
 		return nil, failure
 	end
-	local essence = ProgressionMath.rebirthEssence(progression.rebirths, progression.cycleCoins)
+	local essence =
+		ProgressionMath.rebirthEssence(progression.rebirths, progression.cycleCoins, Upgrades.essenceMultiplier(data))
 	resetEconomy(data)
 	progression.rebirths += 1
 	progression.revision += 1

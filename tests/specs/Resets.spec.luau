@@ -21,8 +21,8 @@ return function()
 		data.seeds.selected = "tomato"
 		data.bag.items["carrot|normal"] = 12
 		data.upgrades.normal.speed = 4
-		data.upgrades.rebirth.luck = 2
-		data.upgrades.permanent.value = 1
+		data.upgrades.rebirth.essence_luck = 2
+		data.upgrades.permanent.mutagenic_energy = 1
 		data.machines.drones.harvester = 2
 		data.progression.rebirths = 1
 		data.progression.prestiges = 1
@@ -96,7 +96,7 @@ return function()
 				Resets.rebirth(data, 7)
 				expect(Deep.equal(without(data, REBIRTH_RESET), without(before, REBIRTH_RESET))).to.equal(true)
 				expect(data.farm.plots.west).to.equal(true)
-				expect(data.upgrades.rebirth.luck).to.equal(2)
+				expect(data.upgrades.rebirth.essence_luck).to.equal(2)
 				expect(BigNum.eq(data.progression.prestigeCoins, BigNum.fromNumber(900000))).to.equal(true)
 			end
 		)

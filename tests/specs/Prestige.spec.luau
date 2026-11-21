@@ -32,8 +32,8 @@ return function()
 		data.seeds.selected = "tomato"
 		data.bag.items["tomato|giant"] = 5
 		data.upgrades.normal.speed = 4
-		data.upgrades.rebirth.luck = 3
-		data.upgrades.permanent.genetics = 2
+		data.upgrades.rebirth.essence_luck = 3
+		data.upgrades.permanent.mutagenic_energy = 2
 		data.machines.drones.harvester = 2
 		data.progression.rebirths = 6
 		data.progression.revision = REVISION
@@ -133,7 +133,7 @@ return function()
 				local data = Deep.copy(before)
 				assert(Resets.prestige(data, REVISION))
 				expect(Deep.equal(without(data, PRESTIGE_RESET), without(before, PRESTIGE_RESET))).to.equal(true)
-				expect(data.upgrades.permanent.genetics).to.equal(2)
+				expect(data.upgrades.permanent.mutagenic_energy).to.equal(2)
 				expect(data.receipts[2]).to.equal("purchase-2")
 				expect(data.stats.totalRebirths).to.equal(6)
 				expect(BigNum.eq(data.stats.coinsEarned, BigNum.fromNumber(2.5e7))).to.equal(true)

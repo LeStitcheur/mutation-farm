@@ -1,37 +1,29 @@
 --!strict
--- ConfirmPanel — panneau modal à deux vues (information, puis confirmation) partagé par Rebirth et Prestige :
---   • bouton de menu (avec indice de touche clavier / manette) et raccourcis ContextActionService ;
---   • cadre mis à l'échelle (Theme.fitScale, suivi de la fenêtre), bouton X / B ;
---   • un seul panneau ouvert à la fois et chat Roblox masqué pendant l'ouverture (PanelHub) ;
+-- ConfirmPanel — panneau à deux vues (information, puis confirmation) partagé par Rebirth et Prestige, bâti sur
+-- UI/ModalPanel (menu, raccourcis, échelle, X / B, PanelHub, chat masqué) :
 --   • vue d'information : contenu fourni par le contrôleur (`info`) + bouton d'action en bas ;
 --   • vue de confirmation : récapitulatif, « Annuler » sélectionné par défaut à la manette, « Confirmer » inactif
 --     pendant `confirmDelay` et, si `acknowledgment` est fourni, tant que la case « J'ai compris » n'est pas cochée
 --     (confirmation renforcée) ; B revient à l'information puis ferme.
 -- Le panneau n'envoie rien au serveur : `onConfirm` (contrôleur) envoie l'intention, le serveur revalide tout.
 
-local ContextActionService = game:GetService("ContextActionService")
-local GuiService = game:GetService("GuiService")
-local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
-
 local Builder = require(script.Parent.Builder)
-local PanelHub = require(script.Parent.PanelHub)
+local ModalPanel = require(script.Parent.ModalPanel)
 local Theme = require(script.Parent.Theme)
 
-local HEADER_HEIGHT = 72
 local ACTION_AREA = 84
 local ACK_HEIGHT = 52
 
 export type Options = {
-	id: string, -- identifiant PanelHub (et des actions ContextActionService)
+	id: string,
 	title: string,
-	parent: Instance, -- ScreenGui du HUD
-	size: Vector2, -- taille de conception (avant mise à l'échelle)
-	menu: Instance, -- cadre du menu latéral (UIListLayout)
+	parent: Instance,
+	size: Vector2,
+	menu: Instance,
 	menuText: string,
 	menuOrder: number,
 	menuColor: Color3,
-	keys: { Enum.KeyCode }, -- raccourcis d'ouverture / fermeture
+	keys: { Enum.KeyCode },
 	keyboardHint: string,
 	gamepadHint: string,
 	confirmDelay: number,
@@ -51,114 +43,48 @@ export type Panel = {
 	setAction: (text: string, enabled: boolean, color: Color3) -> (),
 }
 
-local ConfirmPanel = {}
-
-local function usingGamepad(): boolean
-	return UserInputService:GetLastInputType().Name:sub(1, 7) == "Gamepad"
-end
-
-local function focus(button: GuiObject)
-	if usingGamepad() then
-		GuiService.SelectedObject = button
-	end
-end
-
--- Texte sombre, à la ligne automatique, sur le fond clair du panneau.
-function ConfirmPanel.text(props: Builder.Props): TextLabel
-	props.TextColor3 = props.TextColor3 or Theme.Colors.Text
-	props.TextWrapped = true
-	return Builder.label(props)
-end
-
--- Barre de progression (remplissage + valeur centrée) à la position verticale `y` de `parent`.
-function ConfirmPanel.progressBar(parent: Instance, y: number, height: number): (Frame, TextLabel)
-	local bar = Builder.new("Frame", {
-		Name = "Progress",
-		Position = UDim2.fromOffset(0, y),
-		Size = UDim2.new(1, 0, 0, height),
-		BackgroundColor3 = Theme.Colors.BarBack,
-		Parent = parent,
-	}, { Builder.corner(10) })
-	local fill = Builder.new("Frame", {
-		Name = "Fill",
-		Size = UDim2.fromScale(0, 1),
-		BackgroundColor3 = Theme.Colors.Coin,
-		Parent = bar,
-	}, { Builder.corner(10) }) :: Frame
-	local value = Builder.label({
-		Name = "Value",
-		Size = UDim2.fromScale(1, 1),
-		TextSize = 16,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextStrokeTransparency = 0.2,
-		ZIndex = 2,
-		Parent = bar,
-	})
-	return fill, value
-end
+local ConfirmPanel = {
+	text = ModalPanel.text,
+	progressBar = ModalPanel.progressBar,
+}
 
 function ConfirmPanel.new(options: Options): Panel
-	local backAction = "MutationFarm_" .. options.id .. "_Back"
-	local toggleAction = "MutationFarm_" .. options.id .. "_Toggle"
-	local open = false
+	local header = ModalPanel.HEADER_HEIGHT
 	local confirming = false
 	local delayElapsed = false
 	local acknowledged = false
 	local actionEnabled = false
 	local token = 0
+	local showInfo: () -> ()
 
-	local menuButton = Builder.button({
-		Name = options.menuText,
-		LayoutOrder = options.menuOrder,
-		Size = UDim2.fromOffset(170, 58),
-		Text = options.menuText,
-		TextSize = 24,
-		BackgroundColor3 = options.menuColor,
-		Parent = options.menu,
+	local modal = ModalPanel.new({
+		id = options.id,
+		title = options.title,
+		parent = options.parent,
+		size = options.size,
+		menu = options.menu,
+		menuText = options.menuText,
+		menuOrder = options.menuOrder,
+		menuColor = options.menuColor,
+		keys = options.keys,
+		keyboardHint = options.keyboardHint,
+		gamepadHint = options.gamepadHint,
+		onOpen = function()
+			showInfo()
+		end,
+		onClose = function()
+			confirming = false
+			token += 1
+		end,
+		onBack = function(): boolean
+			if confirming then
+				showInfo()
+				return true
+			end
+			return false
+		end,
 	})
-	local keyHint = Builder.label({
-		Name = "KeyHint",
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -6, 1, -2),
-		Size = UDim2.fromOffset(30, 20),
-		Text = options.keyboardHint,
-		TextSize = 14,
-		TextTransparency = 0.25,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		Visible = false,
-		Parent = menuButton,
-	})
-
-	local frame = Builder.new("Frame", {
-		Name = options.id .. "Panel",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(options.size.X, options.size.Y),
-		BackgroundColor3 = Theme.Colors.Panel,
-		Visible = false,
-		Parent = options.parent,
-	}, { Builder.corner(18), Builder.stroke(Theme.Colors.Outline, 4) }) :: Frame
-	local scale = Instance.new("UIScale")
-	scale.Parent = frame
-
-	Builder.label({
-		Name = "Title",
-		Position = UDim2.fromOffset(20, 12),
-		Size = UDim2.new(1, -100, 0, 44),
-		Text = options.title,
-		TextSize = 34,
-		TextColor3 = Theme.Colors.Text,
-		Parent = frame,
-	})
-	local closeButton = Builder.button({
-		Name = "Close",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -12, 0, 12),
-		Size = UDim2.fromOffset(56, 56),
-		BackgroundColor3 = Theme.Colors.Red,
-		Text = "X",
-		Parent = frame,
-	})
+	local frame = modal.frame
 
 	local infoView = Builder.new("Frame", {
 		Name = "InfoView",
@@ -168,8 +94,8 @@ function ConfirmPanel.new(options: Options): Panel
 	}) :: Frame
 	local info = Builder.new("Frame", {
 		Name = "Info",
-		Position = UDim2.fromOffset(20, HEADER_HEIGHT),
-		Size = UDim2.new(1, -40, 1, -(HEADER_HEIGHT + ACTION_AREA)),
+		Position = UDim2.fromOffset(20, header),
+		Size = UDim2.new(1, -40, 1, -(header + ACTION_AREA)),
 		BackgroundTransparency = 1,
 		Parent = infoView,
 	}) :: Frame
@@ -186,8 +112,8 @@ function ConfirmPanel.new(options: Options): Panel
 
 	local confirmView = Builder.new("Frame", {
 		Name = "Confirm",
-		Position = UDim2.fromOffset(20, HEADER_HEIGHT),
-		Size = UDim2.new(1, -40, 1, -HEADER_HEIGHT),
+		Position = UDim2.fromOffset(20, header),
+		Size = UDim2.new(1, -40, 1, -header),
 		BackgroundTransparency = 1,
 		Visible = false,
 		Parent = frame,
@@ -237,15 +163,6 @@ function ConfirmPanel.new(options: Options): Panel
 		Parent = confirmView,
 	})
 
-	local function updateScale()
-		local camera = Workspace.CurrentCamera
-		if camera then
-			local viewport = camera.ViewportSize
-			local base = Theme.scaleFor(viewport, UserInputService.TouchEnabled)
-			scale.Scale = Theme.fitScale(base, viewport, options.size)
-		end
-	end
-
 	local function ready(): boolean
 		return confirming and delayElapsed and (ackText == nil or acknowledged)
 	end
@@ -263,7 +180,7 @@ function ConfirmPanel.new(options: Options): Panel
 		end
 	end
 
-	local function showInfo()
+	showInfo = function()
 		confirming = false
 		delayElapsed = false
 		acknowledged = false
@@ -271,7 +188,7 @@ function ConfirmPanel.new(options: Options): Panel
 		infoView.Visible = true
 		confirmView.Visible = false
 		refreshConfirm()
-		focus(actionButton)
+		ModalPanel.focus(actionButton)
 	end
 
 	local function showConfirm(text: string)
@@ -284,7 +201,7 @@ function ConfirmPanel.new(options: Options): Panel
 		infoView.Visible = false
 		confirmView.Visible = true
 		refreshConfirm()
-		focus(cancelButton)
+		ModalPanel.focus(cancelButton)
 		task.delay(options.confirmDelay, function()
 			if confirming and current == token then
 				delayElapsed = true
@@ -293,53 +210,6 @@ function ConfirmPanel.new(options: Options): Panel
 		end)
 	end
 
-	local function setOpen(value: boolean)
-		if open == value then
-			return
-		end
-		open = value
-		frame.Visible = value
-		if value then
-			PanelHub.opened(options.id)
-			updateScale()
-			showInfo()
-			ContextActionService:BindAction(backAction, function(_, inputState: Enum.UserInputState)
-				if inputState == Enum.UserInputState.Begin then
-					if confirming then
-						showInfo()
-					else
-						setOpen(false)
-					end
-				end
-				return Enum.ContextActionResult.Sink
-			end, false, Enum.KeyCode.ButtonB)
-		else
-			confirming = false
-			token += 1
-			ContextActionService:UnbindAction(backAction)
-			if GuiService.SelectedObject and GuiService.SelectedObject:IsDescendantOf(frame) then
-				GuiService.SelectedObject = nil
-			end
-			PanelHub.closed(options.id)
-		end
-	end
-
-	local function updateInputHints()
-		local gamepad = usingGamepad()
-		keyHint.Text = if gamepad then options.gamepadHint else options.keyboardHint
-		keyHint.Visible = gamepad or (UserInputService.KeyboardEnabled and not UserInputService.TouchEnabled)
-		closeButton.Text = if gamepad then "B" else "X"
-	end
-
-	PanelHub.register(options.id, function()
-		setOpen(false)
-	end)
-	menuButton.Activated:Connect(function()
-		setOpen(not open)
-	end)
-	closeButton.Activated:Connect(function()
-		setOpen(false)
-	end)
 	actionButton.Activated:Connect(function()
 		if actionEnabled then
 			options.onAction()
@@ -358,38 +228,18 @@ function ConfirmPanel.new(options: Options): Panel
 	confirmButton.Activated:Connect(function()
 		if ready() then
 			options.onConfirm()
-			setOpen(false)
+			modal.setOpen(false)
 		end
 	end)
-
-	ContextActionService:BindAction(toggleAction, function(_, inputState: Enum.UserInputState)
-		if inputState == Enum.UserInputState.Begin then
-			setOpen(not open)
-		end
-		return Enum.ContextActionResult.Sink
-	end, false, table.unpack(options.keys))
-	updateInputHints()
-	UserInputService.LastInputTypeChanged:Connect(updateInputHints)
-	local function watchCamera()
-		local camera = Workspace.CurrentCamera
-		if camera then
-			camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
-		end
-		updateScale()
-	end
-	watchCamera()
-	Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watchCamera)
 
 	return {
 		frame = frame,
 		info = info,
-		isOpen = function(): boolean
-			return open
-		end,
+		isOpen = modal.isOpen,
 		isConfirming = function(): boolean
 			return confirming
 		end,
-		setOpen = setOpen,
+		setOpen = modal.setOpen,
 		showInfo = showInfo,
 		showConfirm = showConfirm,
 		setAction = function(text: string, enabled: boolean, color: Color3)

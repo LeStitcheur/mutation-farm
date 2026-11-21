@@ -9,6 +9,7 @@
 local Types = require(script.Parent.Parent.Types)
 local ProgressionConfig = require(script.Parent.Parent.Config.ProgressionConfig)
 local BigNum = require(script.Parent.BigNum)
+local Upgrades = require(script.Parent.Upgrades)
 
 type BigNum = Types.BigNum
 type PlayerData = Types.PlayerData
@@ -78,16 +79,18 @@ function ProgressionMath.prestigeMultiplier(prestiges: number): number
 	return 1 + config.MultiplierLinear * prestiges + config.MultiplierQuadratic * prestiges * prestiges
 end
 
--- Multiplicateur appliqué à toute rentrée de Coins gagnée (vente et bonus de précision) : rebirth × prestige.
--- Les améliorations (jalon C) s'ajouteront ici : point d'entrée unique.
+-- Multiplicateur appliqué à toute rentrée de Coins gagnée (vente et bonus de précision) :
+-- rebirth × prestige × améliorations de valeur (point d'entrée unique).
 function ProgressionMath.incomeMultiplier(data: PlayerData): number
 	local progression = data.progression
 	return ProgressionMath.rebirthMultiplier(progression.rebirths)
 		* ProgressionMath.prestigeMultiplier(progression.prestiges)
+		* Upgrades.valueMultiplier(data)
 end
 
 -- Mutation Essence d'un rebirth fait avec `cycleCoins` gagnés pendant le cycle (0 sous le seuil).
-function ProgressionMath.rebirthEssence(n: number, cycleCoins: BigNum): BigNum
+-- `bonus` : multiplicateur des améliorations (Instinct du collectionneur), 1 par défaut.
+function ProgressionMath.rebirthEssence(n: number, cycleCoins: BigNum, bonus: number?): BigNum
 	local threshold = ProgressionMath.rebirthThreshold(n)
 	if BigNum.lt(cycleCoins, threshold) then
 		return BigNum.zero()
@@ -97,6 +100,7 @@ function ProgressionMath.rebirthEssence(n: number, cycleCoins: BigNum): BigNum
 	local amount = config.EssenceBase
 		* (1 + n) ^ config.EssenceRebirthExponent
 		* overshoot ^ config.EssenceOvershootExponent
+		* (bonus or 1)
 	return BigNum.fromNumber(math.floor(amount + 1e-9))
 end
 
@@ -121,9 +125,10 @@ function ProgressionMath.rebirthPreview(data: PlayerData): RebirthPreview
 		cycleCoins = progression.cycleCoins,
 		progress = math.clamp(BigNum.ratio(progression.cycleCoins, threshold), 0, 1),
 		eligible = eligible,
-		essence = ProgressionMath.rebirthEssence(n, progression.cycleCoins),
-		multiplier = ProgressionMath.rebirthMultiplier(n) * prestigeFactor,
-		nextMultiplier = ProgressionMath.rebirthMultiplier(n + 1) * prestigeFactor,
+		essence = ProgressionMath.rebirthEssence(n, progression.cycleCoins, Upgrades.essenceMultiplier(data)),
+		multiplier = ProgressionMath.incomeMultiplier(data),
+		-- Les améliorations (Essence et permanentes) sont conservées au rebirth.
+		nextMultiplier = ProgressionMath.rebirthMultiplier(n + 1) * prestigeFactor * Upgrades.valueMultiplier(data),
 	}
 end
 
@@ -189,7 +194,8 @@ function ProgressionMath.prestigePreview(data: PlayerData): PrestigePreview
 		prestigeMultiplier = ProgressionMath.prestigeMultiplier(p),
 		nextPrestigeMultiplier = ProgressionMath.prestigeMultiplier(p + 1),
 		incomeMultiplier = ProgressionMath.incomeMultiplier(data),
-		nextIncomeMultiplier = ProgressionMath.prestigeMultiplier(p + 1),
+		-- Seules les améliorations permanentes (Primal Cores) survivent au prestige.
+		nextIncomeMultiplier = ProgressionMath.prestigeMultiplier(p + 1) * Upgrades.valueMultiplier(data, "cores"),
 	}
 end
 

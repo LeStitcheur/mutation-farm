@@ -101,6 +101,7 @@ export type ClientState = {
 	revision: number,
 	cycleCoins: BigNum,
 	prestigeCoins: BigNum,
+	upgrades: { rebirth: { [string]: number }, permanent: { [string]: number } }, -- niveaux (panneau Améliorations)
 	harvests: number,
 	perfectHarvests: number,
 }

@@ -22,6 +22,7 @@ function ClientView.build(data: Types.PlayerData): Types.ClientState
 		revision = data.progression.revision,
 		cycleCoins = data.progression.cycleCoins,
 		prestigeCoins = data.progression.prestigeCoins,
+		upgrades = { rebirth = data.upgrades.rebirth, permanent = data.upgrades.permanent },
 		harvests = data.stats.harvests,
 		perfectHarvests = data.stats.perfectHarvests,
 	}
