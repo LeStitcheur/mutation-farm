@@ -57,7 +57,10 @@ Entrée : `{ path, value, reason, at }` (`Types.QuarantineEntry`).
 - Couvre : montants `BigNum` invalides ou négatifs (monnaies, `coinsEarned`, `cycleCoins`, `prestigeCoins`),
   parcelles et cases inconnues ou invalides, objets du sac, graines inconnues, sélection non débloquée, drones
   inconnus ou au-delà du maximum, compteurs invalides (`rebirths`, `prestiges`, `revision`, `totalRebirths`,
-  `rebirthTokens`), reçus non textuels, liste de quarantaine elle-même invalide.
+  `rebirthTokens`), reçus non textuels, liste de quarantaine elle-même invalide, **niveaux d'améliorations**
+  (Phase 3, jalon C : identifiant inconnu ou rangé dans le mauvais arbre, niveau non entier, négatif ou nul →
+  retiré ; au-delà du maximum → plafonné, valeur d'origine en quarantaine). Le schéma reste en v2 : les champs
+  `upgrades.rebirth` / `upgrades.permanent` existaient déjà, seul leur contenu est désormais validé.
 - La troncature FIFO des reçus (au-delà de 200) est signalée par une note (les reçus retirés sont les plus anciens).
 - Récupération : lire `meta.quarantine` (Studio : `ServerStorage.MutationFarmDev:Invoke("snapshot", userId)`) puis
   restaurer par une migration dédiée si une donnée doit être rendue au joueur.

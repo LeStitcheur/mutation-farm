@@ -26,9 +26,9 @@ Phase 3** avec un simulateur Lune.
 ## 2. Récolte et vente
 
 - **Sac** : capacité de base 40 objets (améliorations Phase 3).
-- **Valeur de vente** = `valeurBase(plante) × multiplicateur(mutation) × M(R) × Mp(P)` où `M(R)` et `Mp(P)` sont
-  les multiplicateurs de rebirth et de prestige (§4), appliqués au total du sac et arrondis à l'inférieur
-  (améliorations : jalon C).
+- **Valeur de vente** = `valeurBase(plante) × multiplicateur(mutation) × M(R) × Mp(P) × A` où `M(R)` et `Mp(P)` sont
+  les multiplicateurs de rebirth et de prestige (§4) et `A` celui des améliorations de valeur
+  (`docs/PROGRESSION.md` §4), appliqués au total du sac et arrondis à l'inférieur.
 - **Bonus de précision** du joueur (Coins instantanés, arrondis à l'inférieur) :
   Parfait (≤ 1,5 s) = 50 % de la valeur de base, Bien (≤ 5 s) = 20 %, puis `× M(R) × Mp(P)` (jamais la mutation).
 - **Coins gagnés** (ventes + bonus) : alimentent `stats.coinsEarned` et les compteurs de cycle (`docs/PROGRESSION.md`).
@@ -106,6 +106,11 @@ L'ancien contrat Phase 5 (coût `5·10⁷ × 6ⁿ`, multiplicateur `1,5ⁿ`, Reb
 12. Pas de cycle instantané après un prestige : `Mp(p + 1)` < `M(minimum de rebirths) × Mp(p)` (testé pour
     p = 0..30 ; ex. ×1,58 juste après le 1ᵉʳ prestige contre ×3,125 juste avant). Conditions de prestige
     strictement croissantes (testé jusqu'à p = 60).
+13. Améliorations plafonnées : chance ≤ 2,5 (E ≤ 1,98), pousse ≥ 40 %, intervalle des drones ≥ 50 %, délai de
+    grâce inchangé (`Upgrades.spec`).
+14. Rythme mesuré par le simulateur (`EconomySim.spec`) : premier rebirth en 8–25 min (actif), 10–30 min (hybride),
+    15–45 min (automatisé) ; premier prestige en 1 h 30 – 5 h ; cycle suivant plus court mais ≥ 3 min ; aucune
+    amélioration Essence de niveau 1 ne réduit le revenu (≥ −1 %) ; Valeur de vente ≥ +8 %.
 
 ## 6. Grands nombres
 
@@ -168,3 +173,122 @@ Lecture :
 - Sans personne pour vendre, les drones s'arrêtent dès que le sac est plein : la vente automatique relève de la Phase 4.
 - Réglage : `graceDelay` est un paramètre par type de drone ; un futur drone « rapide » pourra avoir un délai plus
   court (l'invariant `graceDelay ≥ GoodWindow` serait alors à revoir explicitement).
+
+## 8. Simulateur économique et équilibrage (Phase 3, jalon C)
+
+**Outil** : `tests/sim/EconomySim.luau` rejoue une partie avec les règles pures du jeu (HarvestRules, Economy,
+DroneLogic, ProgressionMath, Resets, Upgrades, MutationRoll) ; seules les décisions du joueur sont modélisées.
+Déterministe (pas de 0,25 s, mutations tirées après `math.randomseed`). Rapport complet :
+
+```powershell
+tools/bin/lune.exe run tests/run.luau report
+```
+
+**Profils** : 1. actif sans drone (réaction 1 s → Parfait, 1,2 s entre récoltes) ; 2. hybride (réaction 3 s,
+1 drone) ; 3. principalement automatisé (joue jusqu'au 1ᵉʳ drone, 3 drones, vend toutes les 2 min) ; 4. avancé
+(actif, 3 drones, rebirth et prestige dès que possible, améliorations les moins chères d'abord) ; 5. après prestige
+(profil 4 poursuivi). Tous débloquent la graine suivante dès qu'elle est payable et vont vendre dès que le sac est
+plein ou que son contenu paie leur prochain achat. **Chaque valeur est la moyenne de 8 parties** (graines 1 à 8) :
+une partie seule est trop sensible aux mutations rares et à l'instant des déblocages.
+
+### A. Coins gagnés par minute selon la graine (10 min, 9 cases, sans amélioration)
+
+| Graine | Actif sans drone | Hybride + 1 drone | Drones seuls (3, vente toutes les 2 min) |
+|---|---|---|---|
+| Carotte | 633 | 708 | 320 |
+| Tomate | 3 144 | 2 444 | 1 442 |
+| Maïs | 7 276 | 5 819 | 4 761 |
+| Citrouille | 16 230 | 13 193 | 11 096 |
+| Champi-lune | 34 720 | 30 580 | 27 900 |
+| Fleur-étoile | 70 184 | 61 799 | 56 469 |
+| Fruit du dragon | 109 912 | 95 738 | 87 188 |
+
+### B. Premier rebirth (100 000 Coins gagnés pendant le cycle), partie neuve
+
+| Profil | Moyenne | Min – max | Coins gagnés / min | Part des drones |
+|---|---|---|---|---|
+| 1. Actif sans drone | 14,4 min | 10,6 – 16,1 min | 8 423 | 0 % |
+| 2. Hybride, 1 drone | 18,0 min | 15,8 – 19,2 min | 6 377 | 2 % |
+| 3. Principalement automatisé | 28,4 min | 24,1 – 32,1 min | 3 908 | 98 % |
+
+Le drone de l'hybride ne prend que 2 % des revenus : un joueur qui réagit en moins de 5 s garde ses récoltes et
+ses bonus (délai de grâce). L'estimation analytique du jalon A (≈ 14 / 22 min) est confirmée.
+
+### C. Profil 4 (avancé) jusqu'au premier prestige — temps entre rebirths
+
+| Rebirth n° | Atteint à | Durée du cycle | Essence gagnée |
+|---|---|---|---|
+| 1 | 16,5 min | 16,5 min | 103 |
+| 2 | 37,1 min | 20,6 min | 168 |
+| 3 | 1 h 03 | 26,4 min | 252 |
+| 4 | 1 h 42 | 38,5 min | 312 |
+| 5 | 2 h 34 | 52,5 min | 347 |
+
+Premier prestige : **2 h 34** en moyenne (2 h 30 – 2 h 40, 8/8 parties), 10 Primal Cores, 17 niveaux
+d'améliorations Essence achetés. L'Essence dépasse parfois le minimum (ex. 312 au lieu de 282) : une vente d'un
+gros sac peut porter les Coins du cycle bien au-delà du seuil d'un coup (bonus de dépassement voulu, ≤ ×2).
+
+### D. Profil 5 — après le premier prestige
+Premier rebirth en **10,7 min** (contre 16,5 min au tout premier cycle), 5ᵉ rebirth en 1 h 42 : le prestige
+accélère sans rendre les cycles instantanés (invariant 12).
+
+### E. Effets cumulés des mutations
+
+| Chance | E(multiplicateur) | Gain |
+|---|---|---|
+| ×1,0 (base) | 1,505 | — |
+| ×1,5 | 1,692 | +12,4 % |
+| ×2,0 (Chance de mutation au max.) | 1,849 | +22,8 % |
+| ×2,5 (plafond, + Énergie mutagène au max.) | 1,983 | +31,7 % |
+
+### F. Rentabilité des améliorations Essence — revenu sur 30 min après le rebirth n° 1
+
+Mesure par revenu sur une fenêtre fixe (Coins gagnés + valeur du sac) : le temps jusqu'au seuil est quantifié par
+les ventes et masquerait les petits effets. Avec et sans amélioration, les parties partagent la même suite de
+mutations (tirées dans l'ordre des plantations).
+
+| Amélioration | Niveau | Coût | Actif | Hybride | Automatisé | Hybride / 100 Essence |
+|---|---|---|---|---|---|---|
+| (aucune) | — | — | 26 449 /min | 17 411 /min | 8 085 /min | — |
+| Valeur de vente | 1 | 40 | +17,5 % | +18,7 % | +27,0 % | +46,7 % |
+| Valeur de vente | 5 | 579 | +85,1 % | +100,8 % | +135,1 % | +17,4 % |
+| Vitesse de croissance | 1 | 50 | +4,3 % | +5,6 % | +0,0 % | +11,2 % |
+| Vitesse de croissance | 5 | 791 | +36,8 % | +44,8 % | +18,8 % | +5,7 % |
+| Chance de mutation | 1 | 60 | +4,1 % | +3,9 % | +9,2 % | +6,4 % |
+| Chance de mutation | 5 | 950 | +14,3 % | +18,0 % | +26,6 % | +1,9 % |
+| Efficacité des drones | 1 | 50 | +0,0 % | −0,1 % | +3,6 % | −0,2 % |
+| Efficacité des drones | 5 | 725 | +0,0 % | −0,3 % | +10,9 % | −0,0 % |
+| Capacité du sac | 1 | 30 | +0,5 % | +0,3 % | +10,5 % | +1,1 % |
+| Capacité du sac | 5 | 397 | +4,3 % | +3,2 % | +13,2 % | +0,8 % |
+
+Constats :
+- Les gains dépassent l'effet direct (+10 % de valeur → +17 à +27 %) : revenu plus élevé = graines suivantes
+  débloquées plus tôt (effet boule de neige), ce qui fait aussi la valeur du simulateur par rapport aux formules.
+- **Efficacité des drones** n'aide que les joueurs automatisés : au-delà de la Tomate, la production des 9 cases
+  limite les revenus, pas la vitesse des drones. À revoir si les drones gagnent une capacité ou un rôle de vente
+  automatique (Phase 4).
+- **Capacité du sac** sert surtout aux joueurs absents (drones arrêtés sac plein entre deux passages).
+- **Défaut corrigé grâce au simulateur** : `DroneService` replanifiait chaque drone à `now + intervalle` avec une
+  boucle de 0,25 s ; un intervalle de 3,8 s devenait 4 s et les premiers niveaux d'Efficacité des drones n'avaient
+  **aucun effet** en jeu. Planification désormais depuis l'échéance précédente (période moyenne exacte).
+- Premier essai écarté : un joueur simulé qui ne vend que sac plein rendait « Capacité du sac » négative
+  (−3 à −10 %) ; c'était un artefact de stratégie (pièces bloquées dans le sac), corrigé par la vente anticipée.
+
+### G. Multiplicateurs permanents — premier rebirth d'un cycle (profil actif)
+
+| Situation | Premier rebirth |
+|---|---|
+| Partie neuve | 14,4 min |
+| Après 1 prestige (×1,58), sans amélioration | 8,9 min |
+| Après 1 prestige + Génétique supérieure 2 (+10 %) | 8,4 min |
+| Après 1 prestige + Héritage agricole 1 (Tomate gardée) | 8,9 min (aucun effet mesurable) |
+| Après 3 prestiges (×3,22) + Génétique 5, Croissance ancestrale 5, Héritage 2 | 4,8 min |
+
+### Décisions et limites
+- **Carotte et Tomate inchangées** : aucune mesure ne justifie de les modifier (cahier des charges).
+- Pas de rééquilibrage des seuils : le rythme mesuré (14–28 min pour le premier rebirth, ≈ 2 h 30 pour le premier
+  prestige) correspond à la cible « 10–60 min / plusieurs heures » de `docs/GAME_DESIGN.md`.
+- Pistes : rendre Héritage agricole utile dès le niveau 1 (graine plus chère, ou Coins de départ) ; donner un rôle
+  à l'Efficacité des drones pour les joueurs actifs ; simuler les extensions de parcelle (Phase 4).
+- Limites du modèle : une seule parcelle (9 cases), joueur sans erreur ni pause, aucune extension, aucun événement ;
+  les durées sont des ordres de grandeur, pas des promesses de temps de jeu réel.

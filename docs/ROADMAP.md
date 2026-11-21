@@ -85,10 +85,22 @@ avance la Phase 5). Détail : `docs/PROGRESSION.md`.
       10 requêtes croisées rebirth/prestige = 1 transition ; 1 défaut d'affichage corrigé ; manette simulée partielle
 - [ ] Manuel : persistance réelle d'un prestige, mobile, manette (`docs/TESTING.md` §2.4)
 
-**Jalon C — Améliorations et équilibrage**
-- [ ] Arbres d'améliorations de rebirth (Mutation Essence) et permanentes (Primal Cores)
-- [ ] Simulateur économique Lune à 5 profils de joueurs, rééquilibrage
-- [ ] Documentation finale (ARCHITECTURE, ECONOMY, TESTING, PROGRESSION, DATA_MIGRATIONS)
+**Jalon C — Améliorations et équilibrage ✅ (2026-11-21 ; validations manuelles restantes ci-dessous)**
+- [x] Arbre Mutation Essence (5) et arbre Primal Cores (6) : identifiants stables, coûts configurables, niveaux
+      maximum, formules, plafonds (`UpgradeConfig`, `Upgrades`), effets branchés (revenu, sac, pousse, chance,
+      drones, Essence, graines gardées, drones offerts)
+- [x] `UpgradeService` (validation serveur, niveau attendu, refus pendant une transition) ; quarantaine des niveaux
+      malformés au chargement
+- [x] Panneau Améliorations à deux onglets (`UpgradeController` sur `UI/ModalPanel`, base désormais commune avec
+      `ConfirmPanel`) ; U / L2 / B ; menu à 4 boutons
+- [x] Simulateur économique déterministe à 5 profils (`tests/sim`), rapport (`docs/ECONOMY.md` §8), invariants
+      testés ; défaut de planification des drones trouvé et corrigé ; Carotte et Tomate inchangées
+- [x] Tests Lune : 227 (dont `Upgrades.spec` 16, `EconomySim.spec` 6)
+- [x] Documentation (ARCHITECTURE, ECONOMY §8, TESTING, PROGRESSION §4–5, DATA_MIGRATIONS)
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.7) : achats Essence et Primal Cores, effets (sac 50, vente
+      ×1,1 = 135, drone offert), refus serveur, Essence conservée au rebirth et perdue au prestige, panneaux
+      Rebirth / Prestige refactorés revalidés
+- [ ] Manuel : améliorations au toucher et à la manette, persistance réelle (`docs/TESTING.md` §2.4)
 
 ## Phase 4 — Croissance de la ferme et automatisation
 - [ ] Améliorations normales (vitesse, valeur, sac) — UpgradeService + UI

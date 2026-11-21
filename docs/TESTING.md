@@ -85,6 +85,21 @@ Simulations Lune également (pas de validation du vrai DataStore).
   Contrôle de mutation : supprimer `revision + 1` dans `Resets.prestige` fait échouer 4 tests.
 - Non couvert ici : `ProgressionService` / `PrestigeService` (verrou partagé, débit, `SaveNow`), le panneau → Studio.
 
+### Ce qui est couvert hors Studio pour les améliorations et l'équilibrage (Phase 3, jalon C)
+- `Upgrades.spec` (16 tests) : catalogue (5 + 6 identifiants stables) ; coûts exacts et strictement croissants ;
+  achat (bonne monnaie, niveau + 1) ; **refus sans aucune modification** : fonds insuffisants, niveau maximum,
+  niveau périmé, identifiant inconnu ; **100 achats avec le même niveau attendu = 1 niveau payé** ; **nombres
+  invalides** (NaN, −1, 1,5, texte, infini, au-delà du maximum) ; effets et plafonds (valeur multiplicative, pousse
+  ≥ 40 %, chance ≤ 2,5 et E ≤ 1,98, intervalle des drones, délai de grâce de 5 s inchangé, sac, Essence) ; resets
+  (Essence conservée au rebirth, perdue au prestige ; permanents et reçus Robux conservés ; graines gardées et drones
+  offerts appliqués) ; **données malformées** mises en quarantaine ou plafonnées au chargement.
+- `EconomySim.spec` (6 tests, simulateur `tests/sim`) : déterminisme ; premier rebirth borné par profil ; part des
+  drones (automatisé > 80 %, hybride attentif < 10 %) ; premier prestige en 1 h 30 – 5 h et cycle suivant plus court
+  mais ≥ 3 min ; aucune amélioration Essence ne réduit le revenu ; Efficacité des drones agit dès le niveau 1
+  (régression de la planification des drones).
+- Rapport chiffré (non exécuté par `check.ps1`, ≈ 30 s) : `tools/bin/lune.exe run tests/run.luau report`
+  (`docs/ECONOMY.md` §8).
+
 ### Ce qui n'est PAS couvert automatiquement
 Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
 → checklist ci-dessous, déroulée via Studio MCP (§3) ; ce qui exige un humain reste marqué comme tel.
@@ -216,6 +231,9 @@ fenêtres de test sont visibles par le MCP). Ne cocher qu'après exécution rée
 | **Prestige : persistance réelle** (Phase 3) | Comme « Sauvegarde réelle » ; atteindre 5 rebirths (crédits `grantEarned` + rebirths) | Prestige confirmé → Stop immédiat → Play : prestiges = 1, Primal Cores +10 (ou plus), rebirths 0, Essence 0, parcelles par défaut, Mutadex / cosmétiques / reçus intacts ; jamais de Primal Cores sans le reset |
 | **Prestige : mobile** (Phase 3) | *Test › Device* (téléphone) | Menu à 3 boutons sans chevauchement avec le chat ; panneau Prestige ajusté à l'écran ; case « J'ai compris », « Annuler » et « Confirmer » utilisables au toucher |
 | **Prestige : manette** (Phase 3) | Manette branchée | R1 ouvre le panneau ; « Prestige… » → « Annuler » sélectionné ; croix vers la case « J'ai compris », A coche ; « Confirmer » actif seulement après 3 s **et** case cochée ; B revient puis ferme |
+| **Améliorations : mobile** (Phase 3) | *Test › Device* (téléphone) | Menu à 4 boutons sans chevauchement avec le chat ouvert ; panneau ajusté à l'écran, onglets et boutons d'achat utilisables au toucher, textes lisibles |
+| **Améliorations : manette** (Phase 3) | Manette branchée | L2 ouvre le panneau, onglet sélectionné ; croix pour passer d'un onglet aux lignes, A achète (niveau + 1, solde mis à jour), B ferme |
+| **Améliorations : persistance réelle** (Phase 3) | Comme « Sauvegarde réelle » | Niveaux achetés restaurés après Stop / Play ; améliorations Essence perdues et permanentes conservées après un prestige réel |
 
 ### 2.5 Phase 3, jalon A (rebirth) — validation Studio MCP du 2026-11-21 (Play solo, API désactivée)
 
@@ -272,6 +290,31 @@ exécuté par `ProgressionService`.
 | Casse du récapitulatif | ✅ (correctif) | `string.lower` donnait « mutation essence » : supprimé dans les deux panneaux après la passe (texte de même longueur ; non revu à l'écran) |
 | Persistance réelle d'un prestige | ⛔ non vérifiable | Store mémoire ; sauvegardes cohérentes couvertes **en simulation** (`Prestige.spec`), protocole §2.4 |
 | Mobile, vraie manette | ⛔ non vérifiable | Protocole §2.4 |
+
+### 2.7 Phase 3, jalon C (améliorations) — validation Studio MCP du 2026-11-21 (Play solo, API désactivée)
+
+Build de la branche `phase-3/progression` (UpgradeService, UpgradeController, ModalPanel, planification corrigée des
+drones présents ; 13 services ; remote `UpgradePurchase` ; console sans erreur du jeu). Fenêtre de jeu réduite
+(675 × 613) pendant toute la passe. Rebirth et prestige faits **par les panneaux refactorés** (ConfirmPanel sur
+ModalPanel) ; seuils crédités par `grantEarned`.
+
+| Contrôle | Statut | Constat |
+|---|---|---|
+| Menu à 4 boutons | ✅ | Graines (G), Rebirth (R), Prestige (P), Améliorations (U, bleu) ; menu ajusté à son contenu |
+| Panneau Améliorations | ✅ | U ouvre, chat masqué ; onglets « Mutation Essence » (doré) / « Primal Cores » (violet) ; solde et note de l'arbre ; 5 et 6 lignes « nom · niv. 0/max », effet, coût (40, 50, 60, 50, 30 Essence ; 4, 5, 12, 4, 6, 6 Cores) ; aucun dépassement de texte (`TextFits`) sur les deux onglets |
+| Rebirth par le panneau refactoré | ✅ | R → « Rebirth… » → « Confirmer » après 1,5 s → rebirth 1, révision 1, 100 Essence |
+| Achats Essence | ✅ | Clic « 40 Essence » (Valeur de vente) puis « 30 Essence » (Capacité du sac) : Essence 100 → 30, niveaux 1/10, coûts suivants 62 et 45, boutons gris quand inabordables ; HUD **« Sac 0/50 »** |
+| Refus serveur | ✅ | Fonds insuffisants : « Pas assez de Mutation Essence pour cette amélioration. » / « Pas assez de Primal Cores pour cette amélioration. » ; niveau périmé ignoré ; charges invalides (1,5, −1, NaN, identifiant de 40 caractères, nombre, inconnu, tables) ignorées ; données inchangées |
+| Effet Valeur de vente | ✅ | 5 Carottes + 1 Carotte Géante (base 90) vendues **135** = ⌊90 × 1,365 × 1,1⌋ |
+| Essence conservée au rebirth | ✅ | Rebirths 2 à 6 : Essence 1 424 (= 30 + 168 + 227 + 282 + 334 + 383), niveaux Essence intacts |
+| Prestige par le panneau refactoré | ✅ | Récapitulatif avec la casse corrigée (« Coins », « Mutation Essence »), « +12 Primal Cores » (6 rebirths = 1 de plus que le minimum : 10 × 1,25), case cochée puis « Confirmer » après 3 s → prestige 1 |
+| Essence perdue au prestige | ✅ | Essence 0, `upgrades.rebirth` vide, HUD « Sac 0/40 », Primal Cores 12 |
+| Achat Primal Cores | ✅ | Automatisation primordiale : 12 → 0 Cores, niv. 1/2, **drone accordé immédiatement** (1 ancre serveur, 1 modèle client), notification « Automatisation primordiale : niveau 1/2 (1 drone(s) offert(s) par cycle) » |
+| Drone offert à chaque cycle | ✅ | Rebirth suivant : `machines.drones.harvester = 1` à nouveau, amélioration permanente conservée |
+| Touches manette (simulées) | ✅ partiel | `ButtonL2` ouvre / ferme, `ButtonB` ferme (chat restauré) ; sélection automatique non vérifiable (entrées simulées de type `Keyboard`) |
+| Libellé au niveau 0 | ✅ (correctif) | « −0 % de durée de pousse → −4 % … » remplacé par « Niveau 1 : −4 % de durée de pousse » après la passe (texte plus court ; non revu à l'écran) |
+| Niveau maximum en jeu | ⛔ non exécuté | Exigerait des milliers d'Essence ; refus `max_level` couvert en Lune (`Upgrades.spec`) |
+| Persistance réelle, mobile, vraie manette | ⛔ non vérifiable | Protocole §2.4 |
 
 ## 3. Studio MCP (opération manuelle, recommandée)
 

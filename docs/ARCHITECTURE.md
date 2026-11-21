@@ -21,28 +21,32 @@ src/
   shared/   -> ReplicatedStorage.Shared
     Types.luau            Contrats de données (PlayerData, TileState, ClientState…)
     Net.luau              Noms et accès aux RemoteEvents
-    Config/               GameConfig, PlantConfig, MutationConfig, DroneConfig, ProgressionConfig (gelées)
+    Config/               GameConfig, PlantConfig, MutationConfig, DroneConfig, ProgressionConfig, UpgradeConfig
+                          (gelées)
     Util/                 Logique pure : BigNum, Format, Growth, Economy, Inventory, MutationRoll,
                           DataSchema, Resets, FarmLayout, ClientView, Signal, Deep, SessionLock, SlotAllocator,
-                          HarvestRules, DroneLogic, ProgressionMath
+                          HarvestRules, DroneLogic, ProgressionMath, Upgrades
   server/   -> ServerScriptService.Server
     init.server.luau      Bootstrap des services
     Config/MutationOdds   Poids de mutation (jamais répliqués)
     Infra/                DataStoreAdapter, RateLimiter, Notifier
     Services/             DataService, EconomyService, PlantService, MutationService, FarmService, HarvestService,
                           DroneService, ProgressionService, RebirthService, PrestigeService,
-                          DevService (Studio uniquement), SyncService
+                          UpgradeService, DevService (Studio uniquement), SyncService
   client/   -> StarterPlayer.StarterPlayerScripts.Client
     init.client.luau      Bootstrap des contrôleurs
-    Controllers/          StateController, HudController, RebirthController, PlantRenderer, HarvestController,
-                          DroneRenderer
+    Controllers/          StateController, HudController, RebirthController, PrestigeController, UpgradeController,
+                          PlantRenderer, HarvestController, DroneRenderer
     UI/                   Theme, Builder, PanelHub (un panneau à la fois, chat masqué),
-                          ConfirmPanel (panneau information + confirmation commun à Rebirth et Prestige)
+                          ModalPanel (base des panneaux du menu : bouton, touches, échelle, X / B, PanelHub),
+                          ConfirmPanel (information + confirmation, sur ModalPanel : Rebirth et Prestige)
     Visuals/              PlantVisuals (modèles procéduraux)
 tests/
   run.luau                Runner Lune (simule require(script…) et game:GetService)
   TestEZLite.luau         describe/it/expect compatibles TestEZ
   specs/*.spec.luau       Specs exécutables aussi par TestEZ en Studio
+  sim/                    Simulateur économique (EconomySim) et rapport (`lune run tests/run.luau report`),
+                          exposés aux specs comme TestService.Sim — jamais synchronisés dans le jeu
 ```
 
 ## 3. Services serveur
@@ -67,11 +71,12 @@ dépend de ces trois derniers.)
 | **FarmService** | Parcelles (attribution, construction), état des cases, replantation | `PlantTile`, `ReplantEmpty`, `GetTilePart`, `OwnsTile`, `GetPlotModel`, `GetPlotOrigin`, signal `PlotReady` |
 | **HarvestService** | Récoltes joueur et drone (règles communes `HarvestRules`), bonus de précision (joueur seulement), notification des mutations ≥ ×8 | `Harvest`, `HarvestForDrone` |
 | **SyncService** | Réplication de l'état joueur (coalescée, ≤ 10 Hz) | — |
-| **MutationService** | Tirage pondéré exclusif d'une mutation par plantation (`Random` serveur, poids `MutationOdds`) ; valide la configuration au démarrage | `Roll` |
-| **DroneService** | Station d'achat (ProximityPrompt serveur, propriétaire seulement), flotte sauvegardée (`machines.drones`), **une** boucle serveur pour tous les drones, ancres `FarmDrone` | `Buy`, `Refresh` |
+| **MutationService** | Tirage pondéré exclusif d'une mutation par plantation (`Random` serveur, poids `MutationOdds` × chance du joueur `Upgrades.luck`, poids mis en cache par niveau de chance) ; valide la configuration au démarrage | `Roll(luck?)` |
+| **DroneService** | Station d'achat (ProximityPrompt serveur, propriétaire seulement), flotte sauvegardée (`machines.drones`), **une** boucle serveur pour tous les drones (intervalle `DroneLogic.interval`, planifié depuis l'échéance précédente), ancres `FarmDrone` | `Buy`, `Refresh` |
 | **ProgressionService** | Exécution commune des transitions (§7.1) : verrou par joueur partagé rebirth/prestige, mutateur unique, replantation, flotte recalculée, notification, sauvegarde immédiate ; validation des révisions reçues | `Run`, `IsValidRevision` |
 | **RebirthService** | Rebirth (Phase 3, jalon A) : remote, débit, règle `Resets.rebirth` exécutée par `ProgressionService.Run` | `Rebirth` |
 | **PrestigeService** | Prestige (Phase 3, jalon B) : remote, débit, règle `Resets.prestige` exécutée par `ProgressionService.Run` | `Prestige` |
+| **UpgradeService** | Achats d'améliorations (Phase 3, jalon C) : remote validé, débit, refus pendant une transition, `Upgrades.purchase` dans un mutateur, flotte recalculée pour les drones offerts | `Purchase` |
 | **DevService** | Outils de test **Studio uniquement** (`RunService:IsStudio()`) : `ServerStorage.MutationFarmDev` (BindableFunction, inaccessible aux clients) — `grantEarned`, `snapshot` | — |
 | *AutomationService* | Phase 4 (drones collecteurs, vente auto, hors ligne) | |
 | *PurchaseService* | Phase 6 | |
@@ -88,6 +93,7 @@ traitement des joueurs). `DataService.Start` est appelé en **dernier** pour que
 | `SelectSeed` | C→S | `plantId: string` | type, 4 req/s, graine débloquée |
 | `RebirthRequest` | C→S | `revision: number` (révision de progression affichée) | type, fini, entier, 0 ≤ r < 2³¹, 0,5 req/s, verrou par joueur ; révision = révision courante (sinon refus sans effet), seuil de Coins gagnés pendant le cycle |
 | `PrestigeRequest` | C→S | `revision: number` (révision de progression affichée) | mêmes contrôles que `RebirthRequest` (verrou **partagé**) ; rebirths depuis le dernier prestige et Coins gagnés depuis le dernier prestige ≥ conditions |
+| `UpgradePurchase` | C→S | `upgradeId: string`, `expectedLevel: number` (niveau affiché) | chaîne ≤ 32 du catalogue, entier 0..1 000, 4 req/s, aucune transition en cours ; niveau attendu = niveau courant (sinon refus sans effet), niveau < maximum, solde de la monnaie de l'arbre ≥ coût |
 | `ClientReady` | C→S | — | 1 req/s ; si profil chargé : renvoi de `LoadStatus` + `StateSync` (rattrape les événements émis avant la connexion des écouteurs) |
 | `StateSync` | S→C | `ClientState` | — |
 | `HarvestResult` | S→C | `{ tileId, plantId, mutation, tier, bonus, source }` (`source` : `"player"` / `"drone"`) | — |
