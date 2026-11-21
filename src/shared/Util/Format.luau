@@ -61,6 +61,18 @@ function Format.number(value: number): string
 	return Format.bigNum(BigNum.fromNumber(value))
 end
 
+-- Multiplicateur de revenu, virgule décimale, TRONQUÉ au millième : 1 -> "×1", 1.365 -> "×1,365", 1.76 -> "×1,76".
+function Format.multiplier(value: number): string
+	local thousandths = math.floor(value * 1000 + 1e-6) -- 1e-6 : absorbe l'erreur binaire (1.365 = 1.36499…)
+	local whole = thousandths // 1000
+	local fraction = thousandths - whole * 1000
+	if fraction == 0 then
+		return string.format("×%d", whole)
+	end
+	local decimals = string.gsub(string.format("%03d", fraction), "0+$", "")
+	return string.format("×%d,%s", whole, decimals)
+end
+
 -- 6 -> "6 s", 90 -> "1 min 30 s", 3720 -> "1 h 02 min"
 function Format.duration(seconds: number): string
 	local total = math.max(0, math.floor(seconds + 0.5))

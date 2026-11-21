@@ -12,6 +12,7 @@ local Net = require(ReplicatedStorage.Shared.Net)
 local Controllers = script.Controllers
 local StateController = require(Controllers.StateController)
 local HudController = require(Controllers.HudController)
+local RebirthController = require(Controllers.RebirthController)
 local PlantRenderer = require(Controllers.PlantRenderer)
 local HarvestController = require(Controllers.HarvestController)
 local DroneRenderer = require(Controllers.DroneRenderer)
@@ -24,6 +25,7 @@ type Controller = {
 local ordered: { Controller } = {
 	StateController,
 	HudController,
+	RebirthController, -- après HudController : se greffe sur MutationFarmHUD.Menu
 	PlantRenderer,
 	HarvestController,
 	DroneRenderer,

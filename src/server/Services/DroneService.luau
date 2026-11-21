@@ -232,6 +232,15 @@ function DroneService.Buy(player: Player, droneId: string): (boolean, string?)
 	return true, nil
 end
 
+-- Resynchronise la flotte avec la donnée (après un rebirth : drones retirés, invites remises à zéro).
+function DroneService.Refresh(player: Player)
+	local runtime = runtimes[player]
+	if runtime then
+		layoutDrones(player, runtime)
+		refreshPrompts(player, runtime)
+	end
+end
+
 local function tick()
 	local now = Workspace:GetServerTimeNow()
 	for player, runtime in runtimes do

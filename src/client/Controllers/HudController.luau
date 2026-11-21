@@ -6,8 +6,6 @@ local ContextActionService = game:GetService("ContextActionService")
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local StarterGui = game:GetService("StarterGui")
-local TextChatService = game:GetService("TextChatService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
@@ -20,6 +18,7 @@ local Format = require(Shared.Util.Format)
 local Net = require(Shared.Net)
 local StateController = require(script.Parent.StateController)
 local Builder = require(script.Parent.Parent.UI.Builder)
+local PanelHub = require(script.Parent.Parent.UI.PanelHub)
 local Theme = require(script.Parent.Parent.UI.Theme)
 
 type SeedAction = "select" | "unlock" | "none"
@@ -61,8 +60,7 @@ local panelOpen = false
 local toastCounter = 0
 local loadingHidden = false
 local viewportConnection: RBXScriptConnection? = nil
--- États du chat à restaurer à la fermeture du panneau (nil : le panneau ne masque rien).
-local chatRestore: { coreGui: boolean, window: boolean?, inputBar: boolean? }? = nil
+local SEEDS_PANEL = "seeds"
 
 local HudController = {}
 
@@ -472,44 +470,7 @@ local function render(state: Types.ClientState)
 	renderSeeds(current, state)
 end
 
--- Le chat Roblox (coin haut gauche) chevauche le panneau Graines : il est masqué tant que le panneau est
--- ouvert, puis remis EXACTEMENT dans son état précédent. CoreGuiType.Chat couvre l'ancien chat et
--- TextChatService ; les configurations de fenêtre et de saisie sont aussi coupées (PC, mobile, console).
-local function setChatSuppressed(suppressed: boolean)
-	local window = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
-	local inputBar = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
-	if suppressed then
-		if chatRestore then
-			return
-		end
-		chatRestore = {
-			coreGui = StarterGui:GetCoreGuiEnabled(Enum.CoreGuiType.Chat),
-			window = if window then window.Enabled else nil,
-			inputBar = if inputBar then inputBar.Enabled else nil,
-		}
-		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, false)
-		if window then
-			window.Enabled = false
-		end
-		if inputBar then
-			inputBar.Enabled = false
-		end
-		return
-	end
-	local restore = chatRestore
-	if not restore then
-		return
-	end
-	chatRestore = nil
-	if window and restore.window ~= nil then
-		window.Enabled = restore.window
-	end
-	if inputBar and restore.inputBar ~= nil then
-		inputBar.Enabled = restore.inputBar
-	end
-	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, restore.coreGui)
-end
-
+-- Un seul panneau à la fois et chat Roblox masqué pendant l'ouverture : UI/PanelHub.
 local function setPanelOpen(open: boolean)
 	local current = ui
 	if not current or panelOpen == open then
@@ -517,7 +478,11 @@ local function setPanelOpen(open: boolean)
 	end
 	panelOpen = open
 	current.seedPanel.Visible = open
-	setChatSuppressed(open)
+	if open then
+		PanelHub.opened(SEEDS_PANEL)
+	else
+		PanelHub.closed(SEEDS_PANEL)
+	end
 	if open then
 		ContextActionService:BindAction(CLOSE_ACTION, function(_, inputState: Enum.UserInputState)
 			if inputState == Enum.UserInputState.Begin then
@@ -588,6 +553,9 @@ function HudController.Init()
 		Visible = false,
 		Parent = seedsButton,
 	})
+	PanelHub.register(SEEDS_PANEL, function()
+		setPanelOpen(false)
+	end)
 	seedsButton.Activated:Connect(function()
 		setPanelOpen(not panelOpen)
 	end)

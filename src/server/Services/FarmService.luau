@@ -332,6 +332,11 @@ local function ensurePlanted(player: Player)
 	end
 end
 
+-- Replante les cases vides (après un rebirth : toutes, avec la graine de départ et de nouveaux tirages).
+function FarmService.ReplantEmpty(player: Player)
+	ensurePlanted(player)
+end
+
 function FarmService.GetTilePart(player: Player, tileId: string): BasePart?
 	local record = plots[player]
 	return if record then record.tiles[tileId] else nil

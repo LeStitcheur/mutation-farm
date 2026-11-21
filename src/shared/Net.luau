@@ -13,6 +13,7 @@ local Events = {
 	UnlockSeed = "UnlockSeed",
 	SelectSeed = "SelectSeed",
 	ClientReady = "ClientReady", -- écouteurs client connectés : le serveur renvoie l'état complet
+	RebirthRequest = "RebirthRequest", -- révision de progression attendue (idempotence)
 	-- Serveur -> Client
 	StateSync = "StateSync",
 	HarvestResult = "HarvestResult",
