@@ -1,8 +1,11 @@
 --!strict
--- Améliorations de progression (Phase 3, jalon C) : deux arbres, valeurs publiques et gelées.
+-- Améliorations (Phase 3, jalon C ; Phase 5, jalon B) : trois arbres, valeurs publiques et gelées.
+--   • Arbre « coins » (améliorations normales, Phase 5) : payé en Coins, stocké dans upgrades.normal — perdu au
+--     rebirth et au prestige (Resets).
 --   • Arbre « essence » : payé en Mutation Essence, stocké dans upgrades.rebirth — conservé au rebirth, perdu au
 --     prestige.
 --   • Arbre « cores » : payé en Primal Cores, stocké dans upgrades.permanent — jamais réinitialisé.
+-- Les arbres partagent les mêmes effets : ils se cumulent (produit) sous les mêmes plafonds globaux (Caps).
 -- Identifiants STABLES (clés de sauvegarde) : ne jamais renommer ; retirer une amélioration = la laisser en
 -- quarantaine au chargement (DataSchema), jamais la supprimer silencieusement.
 -- Coût du niveau L → L + 1 : ceil(costBase × costGrowth^L). Effet au niveau L : perLevel × L (voir Upgrades.luau).
@@ -10,7 +13,7 @@
 
 local Deep = require(script.Parent.Parent.Util.Deep)
 
-export type TreeId = "essence" | "cores"
+export type TreeId = "coins" | "essence" | "cores"
 export type Effect =
 	"value" -- multiplicateur de revenu : × (1 + perLevel × L) (ventes et bonus de précision)
 	| "growth" -- durée de pousse : × (1 − perLevel × L)
@@ -37,12 +40,19 @@ export type UpgradeDef = {
 export type TreeDef = {
 	id: TreeId,
 	name: string,
-	currency: "essence" | "primalCores", -- champ de data.currencies
-	storage: "rebirth" | "permanent", -- champ de data.upgrades
+	currency: "coins" | "essence" | "primalCores", -- champ de data.currencies
+	storage: "normal" | "rebirth" | "permanent", -- champ de data.upgrades
 	note: string,
 }
 
 local trees: { [TreeId]: TreeDef } = {
+	coins = {
+		id = "coins",
+		name = "Coins",
+		currency = "coins",
+		storage = "normal",
+		note = "Perdues au rebirth et au prestige",
+	},
 	essence = {
 		id = "essence",
 		name = "Mutation Essence",
@@ -60,6 +70,43 @@ local trees: { [TreeId]: TreeDef } = {
 }
 
 local list: { UpgradeDef } = {
+	-- Arbre Coins (améliorations normales, Phase 5) : remis à zéro à chaque rebirth ; équilibrage docs/ECONOMY.md §13.
+	{
+		id = "coins_growth",
+		tree = "coins",
+		order = 1,
+		name = "Arrosage rapide",
+		description = "Vitesse de croissance : réduit la durée de pousse des nouvelles cultures.",
+		effect = "growth",
+		perLevel = 0.03,
+		maxLevel = 10,
+		costBase = 4000,
+		costGrowth = 2,
+	},
+	{
+		id = "coins_value",
+		tree = "coins",
+		order = 2,
+		name = "Récoltes de qualité",
+		description = "Valeur des récoltes : augmente la valeur des ventes et des bonus de précision.",
+		effect = "value",
+		perLevel = 0.05,
+		maxLevel = 10,
+		costBase = 2500,
+		costGrowth = 1.9,
+	},
+	{
+		id = "coins_bag",
+		tree = "coins",
+		order = 3,
+		name = "Grand sac",
+		description = "Capacité du sac : ajoute des places dans le sac.",
+		effect = "bag",
+		perLevel = 10,
+		maxLevel = 5,
+		costBase = 1500,
+		costGrowth = 2.2,
+	},
 	-- Arbre Mutation Essence ------------------------------------------------------------------------------------
 	{
 		id = "essence_value",

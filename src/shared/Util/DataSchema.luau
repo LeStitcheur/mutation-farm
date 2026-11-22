@@ -390,8 +390,9 @@ function DataSchema.sanitize(data: PlayerData, now: number?): { string }
 		end
 	end
 
-	-- Améliorations des arbres Essence (upgrades.rebirth) et Primal Cores (upgrades.permanent) : identifiants connus
-	-- dans le bon arbre, niveaux entiers ≥ 1, plafonnés au maximum. upgrades.normal : pas encore de catalogue.
+	-- Améliorations des arbres Coins (upgrades.normal, Phase 5), Essence (upgrades.rebirth) et Primal Cores
+	-- (upgrades.permanent) : identifiants connus dans le bon arbre, niveaux entiers ≥ 1, plafonnés au maximum.
+	-- upgrades.normal existait depuis la v1 sans catalogue (jamais écrit par le jeu) : seul son contenu est validé.
 	for _, tree in UpgradeConfig.Trees do
 		local container = (data.upgrades :: any)[tree.storage]
 		if type(container) ~= "table" then

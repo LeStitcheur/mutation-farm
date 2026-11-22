@@ -26,7 +26,10 @@ return function()
 		local data = DataSchema.template(0)
 		data.progression.rebirths = 1
 		if upgradeId then
-			data.upgrades.rebirth[upgradeId] = 1
+			-- Rangée dans le conteneur de son arbre (Coins : upgrades.normal ; Essence : upgrades.rebirth).
+			local def = assert(Upgrades.get(upgradeId))
+			local storage = if def.tree == "coins" then "normal" else "rebirth"
+			data.upgrades[storage][upgradeId] = 1
 		end
 		local sim = EconomySim.new(profile, seed, data)
 		while sim.now < window do
@@ -146,6 +149,40 @@ return function()
 			end
 			expect(#failures).to.equal(0)
 		end)
+
+		-- Améliorations normales (Phase 5) : mêmes garanties, mesurées sur la même fenêtre (docs/ECONOMY.md §13).
+		it(
+			"aucune amélioration normale ne réduit le revenu ; Récoltes de qualité l'augmente d'au moins 5 %",
+			function()
+				local window = 20 * MINUTE
+				local failures = {}
+				for _, key in { "active", "automated" } do
+					for _, seed in { 1, 2 } do
+						local reference = windowRate(profiles[key], nil, seed, window)
+						for _, def in Upgrades.list("coins") do
+							local rate = windowRate(profiles[key], def.id, seed, window)
+							local floor = if def.id == "coins_value" then 1.05 else 0.99
+							if rate < reference * floor then
+								table.insert(
+									failures,
+									string.format(
+										"%s / %s / graine %d : %+.1f %%",
+										key,
+										def.id,
+										seed,
+										100 * (rate / reference - 1)
+									)
+								)
+							end
+						end
+					end
+				end
+				if #failures > 0 then
+					print("    " .. table.concat(failures, "\n    "))
+				end
+				expect(#failures).to.equal(0)
+			end
+		)
 
 		it("Efficacité des drones agit dès le premier niveau (intervalle non arrondi au pas de la boucle)", function()
 			local window = 20 * MINUTE

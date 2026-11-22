@@ -166,7 +166,11 @@ export type ClientState = {
 	revision: number,
 	cycleCoins: BigNum,
 	prestigeCoins: BigNum,
-	upgrades: { rebirth: { [string]: number }, permanent: { [string]: number } }, -- niveaux (panneau Améliorations)
+	upgrades: { -- niveaux (panneau Améliorations)
+		normal: { [string]: number },
+		rebirth: { [string]: number },
+		permanent: { [string]: number },
+	},
 	mutadex: { [ItemKey]: MutadexEntry },
 	mutadexRewards: { [string]: number },
 	pets: ClientPets,

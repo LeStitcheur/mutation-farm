@@ -39,6 +39,11 @@ function Bonuses.valueMultiplier(data: PlayerData, tree: TreeId?): number
 	return Upgrades.valueMultiplier(data, tree) * Pets.valueMultiplier(data)
 end
 
+-- Multiplicateur de revenu hors rebirth/prestige, sans les améliorations de l'arbre `excluded` (aperçus).
+function Bonuses.valueMultiplierExcept(data: PlayerData, excluded: TreeId): number
+	return Upgrades.valueMultiplierExcept(data, excluded) * Pets.valueMultiplier(data)
+end
+
 -- Bonus de précision d'une récolte MANUELLE : × facteur (familiers).
 function Bonuses.manualMultiplier(data: PlayerData): number
 	return Pets.manualMultiplier(data)

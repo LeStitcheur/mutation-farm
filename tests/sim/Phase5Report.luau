@@ -111,11 +111,12 @@ return function()
 	local purchaseTimes: { [string]: { number } } = {}
 	local cycleDurations: { { number } } = {}
 	for _, seed in SEEDS do
-		local t0 = prestigeRun(EconomySim.variant(profiles.advanced, { expansions = false }), seed)
+		local t0 =
+			prestigeRun(EconomySim.variant(profiles.advanced, { expansions = false, coinUpgrades = false }), seed)
 		if t0 then
 			table.insert(withoutTimes, t0)
 		end
-		local t1, sim = prestigeRun(profiles.advanced, seed)
+		local t1, sim = prestigeRun(EconomySim.variant(profiles.advanced, { coinUpgrades = false }), seed)
 		if t1 then
 			table.insert(withTimes, t1)
 		end
@@ -153,5 +154,120 @@ return function()
 	print("|---|---|")
 	for index, durations in cycleDurations do
 		print(string.format("| Rebirth %d | %s |", index, minutes(mean(durations))))
+	end
+
+	-- I. Améliorations normales (arbre Coins).
+	print("\n## I1. Premier rebirth : sans / avec améliorations normales (achat si coût ≤ 20 % du solde)\n")
+	print("| Profil | Sans | Avec | Niveaux achetés (moyenne) |")
+	print("|---|---|---|---|")
+	for _, key in { "active", "hybrid", "automated" } do
+		local without = averaged(function(seed)
+			local sim = EconomySim.new(profiles[key], seed)
+			return EconomySim.runUntil(sim, eligible, 4 * 3600)
+		end)
+		local bought = {}
+		local with = averaged(function(seed)
+			local sim = EconomySim.new(EconomySim.variant(profiles[key], { coinUpgrades = true }), seed)
+			local t = EconomySim.runUntil(sim, eligible, 4 * 3600)
+			table.insert(bought, #EconomySim.eventTimes(sim, "coinUpgrade"))
+			return t
+		end)
+		print(
+			string.format(
+				"| %s | %s | %s | %.1f |",
+				profiles[key].name,
+				minutes(without),
+				minutes(with),
+				mean(bought) or 0
+			)
+		)
+	end
+
+	print("\n## I2. Profil 4 (avancé, extensions comprises) : premier prestige sans / avec améliorations normales\n")
+	local plain, upgraded, levels = {}, {}, {}
+	for _, seed in SEEDS do
+		local t0 = prestigeRun(EconomySim.variant(profiles.advanced, { coinUpgrades = false }), seed)
+		if t0 then
+			table.insert(plain, t0)
+		end
+		local t1, sim = prestigeRun(profiles.advanced, seed)
+		if t1 then
+			table.insert(upgraded, t1)
+		end
+		table.insert(levels, #EconomySim.eventTimes(sim, "coinUpgrade"))
+	end
+	print(
+		string.format(
+			"Premier prestige : sans %s (%d/%d), avec %s (%d/%d) ; niveaux achetés avant le prestige : %.1f.",
+			minutes(mean(plain)),
+			#plain,
+			#SEEDS,
+			minutes(mean(upgraded)),
+			#upgraded,
+			#SEEDS,
+			mean(levels) or 0
+		)
+	)
+
+	print("\n## I3. Rentabilité : revenu sur 20 min après le rebirth n° 1 avec un niveau donné (moyennes)\n")
+	print("| Amélioration | Niveau | Coût total | Actif | Hybride | Automatisé |")
+	print("|---|---|---|---|---|---|")
+	local Upgrades = require(Shared.Util.Upgrades)
+	local DataSchema = require(Shared.Util.DataSchema)
+	local Economy = require(Shared.Util.Economy)
+	local BigNum = require(Shared.Util.BigNum)
+	local WINDOW = 1200
+	local function windowRate(profile, upgradeId: string?, level: number, seed: number): number
+		local data = DataSchema.template(0)
+		data.progression.rebirths = 1
+		if upgradeId then
+			data.upgrades.normal[upgradeId] = level
+		end
+		local sim = EconomySim.new(profile, seed, data)
+		while sim.now < WINDOW do
+			EconomySim.step(sim)
+		end
+		local bag = Economy.sellValue(sim.data.bag.items, ProgressionMath.incomeMultiplier(sim.data))
+		return (BigNum.toNumber(sim.data.stats.coinsEarned) + BigNum.toNumber(bag)) / (WINDOW / 60)
+	end
+	local references = {}
+	for _, key in { "active", "hybrid", "automated" } do
+		references[key] = assert(averaged(function(seed)
+			return windowRate(profiles[key], nil, 0, seed)
+		end))
+	end
+	print(
+		string.format(
+			"| (aucune) | — | — | %.0f /min | %.0f /min | %.0f /min |",
+			references.active,
+			references.hybrid,
+			references.automated
+		)
+	)
+	for _, def in Upgrades.list("coins") do
+		for _, level in { 1, 5 } do
+			local gains = {}
+			for _, key in { "active", "hybrid", "automated" } do
+				local rate = assert(averaged(function(seed)
+					return windowRate(profiles[key], def.id, level, seed)
+				end))
+				gains[key] = 100 * (rate / references[key] - 1)
+			end
+			local cost = 0
+			for step = 0, level - 1 do
+				cost += BigNum.toNumber(Upgrades.cost(def, step))
+			end
+			print(
+				string.format(
+					"| %s | %d | %d | %+.1f %% | %+.1f %% | %+.1f %% |",
+					def.name,
+					level,
+					cost,
+					gains.active,
+					gains.hybrid,
+					gains.automated
+				)
+			)
+		end
 	end
 end

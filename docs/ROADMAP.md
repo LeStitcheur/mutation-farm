@@ -177,7 +177,15 @@ Cahier des charges du 2026-11-22. Branche empilée sur `phase-4/content-retentio
 - [x] Validation Studio MCP (`docs/TESTING.md` §2.9)
 - [ ] Manuel : deux joueurs réels, persistance réelle (`docs/TESTING.md` §2.4)
 
-**Jalon B — Améliorations normales** — à venir
+**Jalon B — Améliorations normales (implémenté, validé en Studio le 2026-11-22)**
+- [x] Arbre « Coins » (`upgrades.normal`, existant : aucune migration) : Arrosage rapide (vitesse de croissance),
+      Récoltes de qualité (valeur), Grand sac (capacité) ; même règle d'achat, mêmes effets et plafonds globaux
+- [x] Remises à zéro au rebirth et au prestige (`Resets`) ; aperçu du rebirth sans ces améliorations
+- [x] Onglet « Coins » du panneau Améliorations (`ModalPanel`, `PanelHub`), sélectionné par défaut
+- [x] Tests Lune : 329 (dont `NormalUpgrades.spec` 13, `EconomySim.spec` +1) ; mesures `docs/ECONOMY.md` §13
+      (premier prestige 1 h 54 → 1 h 44)
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.10)
+- [ ] Manuel : toucher, manette, persistance réelle (`docs/TESTING.md` §2.4)
 **Jalon C — Automatisation (vente automatique)** — à venir
 **Jalon D — Production hors ligne** — à venir
 

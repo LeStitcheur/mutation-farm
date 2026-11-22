@@ -163,6 +163,23 @@ Catalogue `src/shared/Config/UpgradeConfig.luau` (identifiants **stables** : cl�
 Primal Cores ; bouton « Améliorations », touche **U**, manette **L2**). Coût du niveau L → L + 1 :
 `⌈costBase × costGrowth^L⌉`.
 
+### Arbre Coins (améliorations normales, Phase 5, jalon B) — `upgrades.normal` : perdu au rebirth et au prestige
+
+Payées en **Coins**, dans le même panneau (onglet « Coins », sélectionné par défaut), par la même règle
+`Upgrades.purchase` et le même remote `UpgradePurchase` que les deux autres arbres ; leurs effets se cumulent avec
+eux sous les mêmes plafonds globaux. Équilibrage : `docs/ECONOMY.md` §13.
+
+| Identifiant | Nom | Effet par niveau | Max | Coût L → L + 1 | Coût total |
+|---|---|---|---|---|---|
+| `coins_growth` | Arrosage rapide (vitesse de croissance) | −3 % de durée de pousse | 10 | ⌈4 000 × 2^L⌉ | 4 092 000 |
+| `coins_value` | Récoltes de qualité (valeur des récoltes) | +5 % de revenu (ventes et bonus) | 10 | ⌈2 500 × 1,9^L⌉ | 1 700 300 |
+| `coins_bag` | Grand sac (capacité du sac) | +10 places | 5 | ⌈1 500 × 2,2^L⌉ | 63 171 |
+
+Dépenser des Coins ne retarde jamais le rebirth (seuil sur les Coins **gagnés**). L'aperçu du rebirth n'annonce pas
+la valeur de ces améliorations (perdues) : `nextMultiplier` les exclut. `upgrades.normal` existait depuis la v1 sans
+catalogue (jamais écrit par le jeu) : **aucune migration** ; son contenu est désormais validé comme les autres arbres
+(identifiant inconnu ou d'un autre arbre, niveau invalide → quarantaine ; au-delà du maximum → plafonné).
+
 ### Arbre Mutation Essence — `upgrades.rebirth` : conservé au rebirth, perdu au prestige
 
 | Identifiant | Nom | Effet par niveau | Max | Coût L → L + 1 | Coût total |

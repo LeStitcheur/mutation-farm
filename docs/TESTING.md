@@ -172,6 +172,17 @@ Simulations Lune également (pas de validation du vrai DataStore).
 - `EconomySim.spec` : une extension augmente le revenu de plus de 30 % dès que les récolteurs ne sont plus saturés
   (Citrouille, Champi-lune ; joueur actif et 3 drones) ; bornes de rythme mesurées extensions comprises.
 
+### Ce qui est couvert hors Studio pour les améliorations normales (Phase 5, jalon B)
+- `NormalUpgrades.spec` (13 tests) : catalogue (vitesse de croissance, valeur, sac ; arbre `coins`, stockage
+  `normal`, coûts entiers strictement croissants) ; **achat en Coins** (débit exact et niveau + 1 indissociables,
+  autres monnaies intactes ; fonds insuffisants, niveau périmé ×20 et maximum refusés sans modification ; jamais de
+  solde négatif ; dépenser ne retarde pas le rebirth) ; **effets** (valeur cumulée avec les autres arbres et
+  appliquée à la vente, pousse −3 %/niv., sac +10/niv.) et **plafond** de pousse tous arbres au maximum ; **rebirth
+  et prestige** (remises à zéro, arbres Essence / Primal Cores conservés, aperçu du rebirth sans ces améliorations =
+  revenu réel après le rebirth) ; **données corrompues** (identifiant inconnu ou d'un autre arbre, niveau non entier
+  en quarantaine ; au-delà du maximum plafonné ; table non tabulaire recréée).
+- `EconomySim.spec` : aucune amélioration normale ne réduit le revenu au niveau 1 ; Récoltes de qualité ≥ +5 %.
+
 ### Ce qui n'est PAS couvert automatiquement
 Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
 → checklist ci-dessous, déroulée via Studio MCP (§3) ; ce qui exige un humain reste marqué comme tel.
@@ -441,6 +452,23 @@ déplacé devant le panneau, touche E maintenue 0,9 s), rebirths et prestige par
 | Achat hors ordre | ✅ | Champ est avec 5 M Coins après le prestige : « Achète d'abord l'extension précédente. », Coins et parcelles inchangés |
 | Console | ✅ | Aucune erreur ni avertissement des scripts du jeu (seul message : `rbxassetid://203785492`, ressource Roblox hors dépôt) |
 | Non vérifiable ici | ⛔ | Deux joueurs réels (fermes voisines, invite d'achat d'un autre joueur refusée), persistance réelle des extensions — protocole §2.4 |
+
+### 2.10 Phase 5, jalon B (améliorations normales) — validation Studio MCP du 2026-11-22 (Play solo, API désactivée)
+
+Achats par les **vrais boutons** du panneau (clics souris) ou le remote `UpgradePurchase` envoyé par le client,
+touche U, vente par l'invite du marché (E), rebirth par `RebirthRequest` ; `DevService` pour créditer des Coins.
+
+| Contrôle | Résultat | Observation |
+|---|---|---|
+| Panneau | ✅ | Touche U : 3 onglets de même largeur (Coins sélectionné, vert ; Mutation Essence ; Primal Cores), « Solde : 20.0K Coins · Perdues au rebirth et au prestige », 3 lignes (4.00K, 2.50K, 1.50K Coins) |
+| Achats | ✅ | Récoltes de qualité puis Grand sac : 20.0K → 16.0K Coins, niveaux 1/10 et 1/5, coûts suivants 4.75K et 3.30K, HUD « Sac 0/50 » |
+| Rejeu et triche | ✅ | 10 × `UpgradePurchase("coins_value", 0)` + niveau −1, 0,5, chaîne de 500 caractères, table : niveau 1 inchangé, 16 000 Coins, aucune quarantaine |
+| Effet valeur | ✅ | 7 carottes récoltées (valeur brute 80), vente au marché : **+84** = ⌊80 × 1,05⌋ |
+| Effet croissance | ✅ | Arrosage rapide 1 : cases replantées ensuite `GrowTime = 5,820` (6 × 0,97), les autres restent à 6 |
+| Rebirth | ✅ | `upgrades.normal` vide, « Sac 0/40 », niveaux 0 dans le panneau ; Essence gagnée conservée (109) |
+| Non-régression Essence | ✅ | Onglet Mutation Essence, Valeur de vente : 109 → 69 Essence, niveau 1/10 |
+| Console | ✅ | Aucune erreur des scripts du jeu |
+| Constat (Phase 4, non corrigé) | ◐ | Le bandeau d'un événement (« Pluie mutagène ») chevauche le haut d'un panneau ouvert ; titre lisible — suivi proposé |
 
 ## 3. Studio MCP (opération manuelle, recommandée)
 

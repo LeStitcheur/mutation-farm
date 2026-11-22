@@ -116,6 +116,9 @@ L'ancien contrat Phase 5 (coût `5·10⁷ × 6ⁿ`, multiplicateur `1,5ⁿ`, Reb
 15. Extensions de ferme (Phase 5) : achetées dans l'ordre, prix strictement croissants, débit et déblocage
     indissociables (`Expansions.spec`) ; une extension augmente le revenu dès que les récolteurs (joueur, drones) ne
     sont plus saturés par les cases existantes (Maïs et au-delà, `EconomySim.spec`).
+16. Améliorations normales (Phase 5) : payées en Coins sans solde négatif, remises à zéro au rebirth et au prestige,
+    exclues de l'aperçu du rebirth (`NormalUpgrades.spec`) ; aucune ne réduit le revenu au niveau 1 (≥ −1 %) et
+    Récoltes de qualité l'augmente d'au moins 5 % (`EconomySim.spec`).
 
 ## 6. Grands nombres
 
@@ -413,3 +416,39 @@ rebirths, un prix bas aplatissait les cycles. Les prix sont d'environ 1 à 4 seu
 devient utile. Constat du simulateur : acheter une extension quand ses récolteurs sont saturés **retarde** la graine
 suivante (un profil automatisé perdait jusqu'à −7 %) ; les profils simulés n'achètent donc une extension que lorsque
 la production des cases possédées est inférieure à leur capacité de récolte.
+
+## 13. Améliorations normales (Phase 5, jalon B ; catalogue : `docs/PROGRESSION.md` §4)
+
+Arbre « Coins » (`upgrades.normal`) : Arrosage rapide (−3 % de pousse/niv., 10 niv., ⌈4 000 × 2^L⌉), Récoltes de
+qualité (+5 % de revenu/niv., 10 niv., ⌈2 500 × 1,9^L⌉), Grand sac (+10 places/niv., 5 niv., ⌈1 500 × 2,2^L⌉).
+Perdu à chaque rebirth : ces améliorations accélèrent **le cycle en cours** (surtout son début, quand les graines
+lentes ne sont pas encore débloquées) et se rachètent ensuite.
+
+Mesures (`report phase5`, moyennes de 8 parties ; joueur simulé : achète la moins chère dès qu'elle coûte au plus
+20 % de son solde, Grand sac seulement s'il a des drones) :
+
+| Mesure | Sans | Avec |
+|---|---|---|
+| Premier rebirth, actif | 15,2 min | 14,9 min (3,9 niveaux) |
+| Premier rebirth, hybride | 18,6 min | 18,9 min (5,1 niveaux) |
+| Premier rebirth, automatisé | 28,4 min | 29,6 min (5,9 niveaux) |
+| Premier prestige, avancé (extensions comprises) | 1 h 54 | **1 h 44** (71 niveaux achetés sur 5 cycles) |
+
+Rentabilité — revenu sur 20 min après le rebirth n° 1 avec un niveau donné (référence : 15 572 / 11 181 / 4 376
+Coins/min) :
+
+| Amélioration | Niveau | Coût total | Actif | Hybride | Automatisé |
+|---|---|---|---|---|---|
+| Arrosage rapide | 1 | 4 000 | +0,6 % | +2,9 % | −0,0 % |
+| Arrosage rapide | 5 | 124 000 | +36,2 % | +17,9 % | +7,7 % |
+| Récoltes de qualité | 1 | 2 500 | +13,4 % | +6,8 % | +34,6 % |
+| Récoltes de qualité | 5 | 66 004 | +67,9 % | +37,2 % | +85,8 % |
+| Grand sac | 1 | 1 500 | +0,0 % | +1,8 % | +13,1 % |
+| Grand sac | 5 | 63 171 | +0,0 % | +1,8 % | +26,8 % |
+
+Lecture : comme pour l'Essence, l'effet dépasse l'effet direct (graines débloquées plus tôt). Récoltes de qualité
+est la plus rentable pour tous ; Grand sac ne sert qu'aux joueurs absents ou automatisés (un joueur présent vend
+par habitude) ; Arrosage rapide devient intéressant en quelques niveaux. Au premier rebirth, acheter ces
+améliorations retarde un peu la graine suivante : l'effet est neutre (±1 min) ; il devient net sur les cycles
+suivants, où le revenu permet plus de niveaux (premier prestige −9 %). Les plafonds globaux restent ceux du §9
+(pousse ≥ 40 %, testé tous arbres au maximum).

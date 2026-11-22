@@ -1,7 +1,8 @@
 --!strict
--- UpgradeController — panneau Améliorations (UI/ModalPanel) à deux onglets : Mutation Essence (conservées au
--- rebirth, perdues au prestige) et Primal Cores (permanentes). Chaque ligne : nom, niveau / maximum, effet actuel
--- → suivant (ou « maximum »), coût et bouton d'achat (vert si abordable). Touche U, manette L2.
+-- UpgradeController — panneau Améliorations (UI/ModalPanel) à trois onglets : Coins (améliorations normales, Phase 5 :
+-- perdues au rebirth et au prestige), Mutation Essence (conservées au rebirth, perdues au prestige) et Primal Cores
+-- (permanentes). Chaque ligne : nom, niveau / maximum, effet actuel → suivant (ou « maximum »), coût et bouton
+-- d'achat (vert si abordable). Touche U, manette L2.
 -- Le client n'envoie que l'identifiant et le niveau affiché : le serveur revalide tout (UpgradeService).
 
 local Players = game:GetService("Players")
@@ -25,9 +26,10 @@ type UpgradeDef = UpgradeConfig.UpgradeDef
 local PANEL_SIZE = Vector2.new(720, 600)
 local ROW_HEIGHT = 62
 local ROW_GAP = 6
-local TREES: { TreeId } = { "essence", "cores" }
-local TREE_COLORS: { [TreeId]: Color3 } = { essence = Theme.Colors.Gold, cores = Theme.Colors.Violet }
-local COST_UNITS: { [TreeId]: string } = { essence = "Essence", cores = "Cores" }
+local TREES: { TreeId } = { "coins", "essence", "cores" }
+local TREE_COLORS: { [TreeId]: Color3 } =
+	{ coins = Theme.Colors.Green, essence = Theme.Colors.Gold, cores = Theme.Colors.Violet }
+local COST_UNITS: { [TreeId]: string } = { coins = "Coins", essence = "Essence", cores = "Cores" }
 
 type Row = {
 	def: UpgradeDef,
@@ -42,19 +44,25 @@ type Row = {
 local tabs: { [TreeId]: TextButton } = {}
 local rows: { [TreeId]: { Row } } = {}
 local balanceLabel: TextLabel? = nil
-local currentTree: TreeId = "essence"
+local currentTree: TreeId = "coins"
 
 local UpgradeController = {}
 
 -- Donnée partielle suffisante pour les règles pures (Upgrades.level / balance).
 local function partialData(state: Types.ClientState): any
-	local upgrades = state.upgrades or { rebirth = {}, permanent = {} }
+	-- État partiel tolérant (premier StateSync, ancien serveur) : chaque arbre absent est traité comme vide.
+	local upgrades: any = state.upgrades or {}
 	return {
 		currencies = {
+			coins = BigNum.sanitize(state.coins),
 			essence = BigNum.sanitize(state.essence),
 			primalCores = BigNum.sanitize(state.primalCores),
 		},
-		upgrades = upgrades,
+		upgrades = {
+			normal = upgrades.normal or {},
+			rebirth = upgrades.rebirth or {},
+			permanent = upgrades.permanent or {},
+		},
 	}
 end
 
@@ -191,10 +199,15 @@ function UpgradeController.Init()
 	})
 	local frame = created.frame
 	for index, treeId: TreeId in TREES do
+		-- Onglets de même largeur : 20 px de marge de chaque côté, 8 px entre deux onglets.
+		-- Largeur = W / n − fixe, avec fixe = (2 × 20 + 8 × (n − 1)) / n ; position = (i − 1) × (largeur + 8) + 20.
+		local count = #TREES
+		local share = 1 / count
+		local fixed = (2 * 20 + 8 * (count - 1)) / count
 		local tab = Builder.button({
 			Name = "Tab_" .. treeId,
-			Position = UDim2.new((index - 1) * 0.5, if index == 1 then 20 else 6, 0, 72),
-			Size = UDim2.new(0.5, -26, 0, 46),
+			Position = UDim2.new((index - 1) * share, 20 + (index - 1) * (8 - fixed), 0, 72),
+			Size = UDim2.new(share, -fixed, 0, 46),
 			Text = UpgradeConfig.Trees[treeId].name,
 			TextSize = 20,
 			BackgroundColor3 = Theme.Colors.Grey,

@@ -80,6 +80,7 @@ EconomySim.Profiles = {
 		rebirth = true,
 		prestige = true,
 		buyUpgrades = true,
+		coinUpgrades = true, -- améliorations normales (Phase 5) : coût ≤ 20 % du solde
 		expansions = true,
 	},
 }
@@ -239,7 +240,8 @@ local function buyCheapestUpgrades(sim)
 		for _, def in UpgradeConfig.List do
 			local level = Upgrades.level(data, def.id)
 			local useless = def.effect == "droneSpeed" and sim.profile.targetDrones == 0
-			if level < def.maxLevel and not useless then
+			-- L'arbre Coins (améliorations normales) suit sa propre règle (buyCoinUpgrades).
+			if def.tree ~= "coins" and level < def.maxLevel and not useless then
 				local cost = Upgrades.cost(def, level)
 				local affordable = not BigNum.lt(Upgrades.balance(data, def.tree), cost)
 				-- Comparaison entre arbres : un Primal Core pèse comme ~100 Essence.
@@ -254,6 +256,32 @@ local function buyCheapestUpgrades(sim)
 		end
 		assert(Upgrades.purchase(data, best.id, bestLevel))
 		table.insert(sim.events, { kind = "upgrade", time = sim.now, detail = best.id .. " " .. (bestLevel + 1) })
+	end
+end
+
+-- Améliorations normales (arbre Coins, Phase 5) : la moins chère, seulement si elle coûte au plus `COIN_UPGRADE_SHARE`
+-- du solde (le joueur garde l'essentiel pour la graine suivante). Sac : seulement pour un joueur qui compte sur ses
+-- drones (pour un joueur présent, la vente par habitude rend des places en plus inutiles, §8).
+local COIN_UPGRADE_SHARE = 0.2
+local function buyCoinUpgrades(sim)
+	local data = sim.data
+	while true do
+		local best, bestLevel, bestCost = nil, 0, nil
+		for _, def in Upgrades.list("coins") do
+			local level = Upgrades.level(data, def.id)
+			local useless = def.effect == "bag" and sim.profile.targetDrones == 0
+			if level < def.maxLevel and not useless then
+				local cost = BigNum.toNumber(Upgrades.cost(def, level))
+				if bestCost == nil or cost < bestCost then
+					best, bestLevel, bestCost = def, level, cost
+				end
+			end
+		end
+		if not best or not bestCost or bestCost > COIN_UPGRADE_SHARE * BigNum.toNumber(data.currencies.coins) then
+			return
+		end
+		assert(Upgrades.purchase(data, best.id, bestLevel))
+		table.insert(sim.events, { kind = "coinUpgrade", time = sim.now, detail = best.id .. " " .. (bestLevel + 1) })
 	end
 end
 
@@ -339,6 +367,9 @@ local function purchases(sim)
 		local outcome = assert(Resets.rebirth(data, data.progression.revision))
 		table.insert(sim.events, { kind = "rebirth", time = sim.now, detail = BigNum.toNumber(outcome.essence) })
 		afterReset(sim)
+	end
+	if profile.coinUpgrades then
+		buyCoinUpgrades(sim)
 	end
 	if profile.buyUpgrades then
 		local before = DroneLogic.owned(data, "harvester")
