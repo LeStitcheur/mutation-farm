@@ -119,6 +119,9 @@ L'ancien contrat Phase 5 (coût `5·10⁷ × 6ⁿ`, multiplicateur `1,5ⁿ`, Reb
 16. Améliorations normales (Phase 5) : payées en Coins sans solde négatif, remises à zéro au rebirth et au prestige,
     exclues de l'aperçu du rebirth (`NormalUpgrades.spec`) ; aucune ne réduit le revenu au niveau 1 (≥ −1 %) et
     Récoltes de qualité l'augmente d'au moins 5 % (`EconomySim.spec`).
+17. Comptoir automatique (Phase 5) : même valeur que le marché, jamais deux ventes du même objet (manuelle et
+    automatique, dans les deux ordres), perdu au rebirth (`Automation.spec`) ; drones seuls, il rapporte au moins
+    autant que des ventes manuelles toutes les 2 min (`EconomySim.spec`).
 
 ## 6. Grands nombres
 
@@ -452,3 +455,37 @@ par habitude) ; Arrosage rapide devient intéressant en quelques niveaux. Au pre
 améliorations retarde un peu la graine suivante : l'effet est neutre (±1 min) ; il devient net sur les cycles
 suivants, où le revenu permet plus de niveaux (premier prestige −9 %). Les plafonds globaux restent ceux du §9
 (pousse ≥ 40 %, testé tous arbres au maximum).
+
+## 14. Automatisation : comptoir de vente automatique (Phase 5, jalon C ; détail : `docs/AUTOMATION.md`)
+
+Comptoir à **5 000 Coins** (machine du cycle, perdue au rebirth), seuil 50 / 75 / 100 % du sac, vente par la **même
+règle** que le marché (aucune valeur créée, aucune attribution double). Mesures (`report phase5`, moyennes de 8
+parties) :
+
+### J1. Premier rebirth, profil principalement automatisé
+
+| Profil | Premier rebirth | Ventes du comptoir |
+|---|---|---|
+| 3. Automatisé, ventes manuelles toutes les 2 min | 28,4 min | — |
+| 3 bis. Automatisé + comptoir (aucun aller-retour après l'achat) | 28,5 min | 7,4 |
+
+### J2. Trois drones seuls, 10 min (Coins/min) : qui vend le sac ?
+
+| Graine | Personne (drones arrêtés sac plein) | Ventes toutes les 2 min | Comptoir à 100 % | Comptoir à 50 % |
+|---|---|---|---|---|
+| Carotte | 55 | 304 | 653 | 653 |
+| Tomate | 298 | 1 277 | 1 960 | 1 960 |
+| Citrouille | 3 176 | 10 649 | 10 649 | 10 649 |
+| Champi-lune | 12 800 | 24 725 | 24 725 | 24 725 |
+
+### J3. Profil avancé (actif) : premier prestige 1 h 44 sans comptoir, 1 h 47 avec
+
+Lecture :
+- Le comptoir ne rend pas le jeu plus rapide pour qui vend déjà régulièrement (J1, J3 : ±3 %, coût de 5 000 Coins
+  à racheter à chaque cycle). Il **évite que les drones s'arrêtent** quand personne ne vend : avec les graines
+  rapides, trois drones remplissent un sac de 40 en moins d'une minute ; le comptoir double alors le revenu des
+  drones seuls (Carotte ×2,1, Tomate ×1,5). Avec les graines lentes, le sac ne se remplit pas entre deux passages :
+  aucun effet.
+- Le seuil (50 ou 100 %) ne change pas le revenu (même règle de vente) ; il règle seulement la fréquence des ventes
+  et la place laissée libre pour les récoltes manuelles.
+- Le comptoir est la condition d'une production hors ligne au-delà d'un sac plein (§15).

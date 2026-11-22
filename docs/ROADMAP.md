@@ -186,7 +186,17 @@ Cahier des charges du 2026-11-22. Branche empilée sur `phase-4/content-retentio
       (premier prestige 1 h 54 → 1 h 44)
 - [x] Validation Studio MCP (`docs/TESTING.md` §2.10)
 - [ ] Manuel : toucher, manette, persistance réelle (`docs/TESTING.md` §2.4)
-**Jalon C — Automatisation (vente automatique)** — à venir
+**Jalon C — Automatisation avancée (implémenté, validé en Studio le 2026-11-22)**
+- [x] Pas de drone collecteur (aucun objet au sol : distinction non justifiée) ; le transport au marché devient le
+      **comptoir automatique** (5 000 Coins, machine du cycle), seuil 50 / 75 / 100 %
+- [x] Vente automatique par la même règle que le marché (`Selling.sellBag`) dans son propre mutateur : jamais
+      d'attribution double ; aucune boucle supplémentaire
+- [x] Sacs pleins : vente puis reprise de la récolte ; sinon attente sans perte et conseil adapté
+- [x] Réglages (drones actifs, vente automatique, seuil) et statistiques ; panneau Automatisation (K, croix droite)
+- [x] Schéma v6 + migration v5 -> v6 sans perte ; tests Lune : 348 (dont `Automation.spec` 18) ; mesures
+      `docs/ECONOMY.md` §14
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.11)
+- [ ] Manuel : toucher, manette, persistance réelle (`docs/TESTING.md` §2.4)
 **Jalon D — Production hors ligne** — à venir
 
 Rebirth & Prestige : avancés en Phase 3. Floraison dorée : Phase 4, jalon C.

@@ -15,6 +15,7 @@ local GameConfig = require(Shared.Config.GameConfig)
 local MutationConfig = require(Shared.Config.MutationConfig)
 local PlantConfig = require(Shared.Config.PlantConfig)
 local Types = require(Shared.Types)
+local Automation = require(Shared.Util.Automation)
 local BigNum = require(Shared.Util.BigNum)
 local DroneLogic = require(Shared.Util.DroneLogic)
 local FarmLayout = require(Shared.Util.FarmLayout)
@@ -65,12 +66,17 @@ local function notifyBagFull(player: Player, source: Types.HarvestSource)
 			"Sac plein ! Va vendre au marché."
 		)
 	else
+		-- Conseil adapté : installer le comptoir automatique, ou le réactiver s'il est coupé (panneau Automatisation).
+		local data = DataService.GetData(player)
+		local hint = if data and Automation.hasSeller(data)
+			then "Réactive la vente automatique (panneau Automatisation)."
+			else "Va vendre au marché ou installe un comptoir automatique (panneau Automatisation)."
 		Notifier.sendThrottled(
 			player,
 			"drone_bag_full",
 			GameConfig.Drones.BagFullNoticeInterval,
 			"info",
-			"Tes drones attendent : sac plein ! Va vendre au marché."
+			"Tes drones attendent : sac plein ! " .. hint
 		)
 	end
 end
@@ -101,8 +107,11 @@ local function harvest(
 		return false, farFailure
 	end
 	if failure == "bag_full" then
-		notifyBagFull(player, source)
-		return false, "bag_full"
+		-- Sac plein : le comptoir automatique (s'il est installé et activé) vend d'abord, puis la récolte continue.
+		if not EconomyService.AutoSell(player) then
+			notifyBagFull(player, source)
+			return false, "bag_full"
+		end
 	end
 
 	-- Revalidation + application atomiques (aucun yield entre les deux). Floraison dorée lue à cet instant précis.
@@ -121,6 +130,8 @@ local function harvest(
 	if not BigNum.isZero(credit) then
 		EconomyService.AddCoins(player, credit)
 	end
+	-- Comptoir automatique : le sac est vendu dès qu'il atteint le seuil choisi (même règle que le marché).
+	EconomyService.AutoSell(player)
 	FarmService.PlantTile(player, tileId)
 
 	local payload: Types.HarvestResult = {

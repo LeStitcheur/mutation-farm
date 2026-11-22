@@ -95,6 +95,26 @@ return function()
 		end)
 	end)
 
+	describe("comptoir automatique (Phase 5)", function()
+		-- Même règle de vente que le marché : le comptoir ne crée aucune valeur, il évite seulement que les drones
+		-- s'arrêtent sac plein entre deux passages (docs/ECONOMY.md §14, J2).
+		it("drones seuls : le comptoir rapporte au moins autant que des ventes toutes les 2 min", function()
+			local nobody = { name = "personne", manual = false, sellTrip = 1e9, sellEvery = 1e9, targetDrones = 3 }
+			local periodic = { name = "2 min", manual = false, sellTrip = 8, sellEvery = 120, targetDrones = 3 }
+			local function seller(data)
+				data.machines.autoSeller = true
+				data.automation.autoSellEnabled = true
+			end
+			for _, plantId in { "carrot", "pumpkin" } do
+				for _, seed in { 1, 2 } do
+					local manual = EconomySim.steadyIncome(periodic, plantId, 3, 600, seed)
+					local auto = EconomySim.steadyIncome(nobody, plantId, 3, 600, seed, nil, seller)
+					expect(auto >= manual * 0.99).to.equal(true)
+				end
+			end
+		end)
+	end)
+
 	describe("prestige", function()
 		it("premier prestige en 1 h 30 – 5 h ; le cycle suivant est plus rapide, sans être instantané", function()
 			local sim = EconomySim.new(profiles.advanced, 1)

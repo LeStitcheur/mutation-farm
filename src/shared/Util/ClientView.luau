@@ -37,6 +37,15 @@ function ClientView.build(data: Types.PlayerData): Types.ClientState
 		},
 		quests = { daily = data.quests.daily, weekly = data.quests.weekly },
 		boosts = data.boosts,
+		automation = {
+			sellerOwned = data.machines.autoSeller == true,
+			dronesEnabled = data.automation.dronesEnabled,
+			autoSellEnabled = data.automation.autoSellEnabled,
+			autoSellThreshold = data.automation.autoSellThreshold,
+			stats = data.automation.stats,
+		},
+		drones = data.machines.drones,
+		plots = data.farm.plots,
 		harvests = data.stats.harvests,
 		perfectHarvests = data.stats.perfectHarvests,
 	}

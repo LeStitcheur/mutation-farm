@@ -18,6 +18,7 @@ local DroneConfig = require(Shared.Config.DroneConfig)
 local UpgradeConfig = require(Shared.Config.UpgradeConfig)
 local MutationConfig = require(Shared.Config.MutationConfig)
 local GameConfig = require(Shared.Config.GameConfig)
+local Automation = require(Shared.Util.Automation)
 local BigNum = require(Shared.Util.BigNum)
 local DataSchema = require(Shared.Util.DataSchema)
 local DroneLogic = require(Shared.Util.DroneLogic)
@@ -69,6 +70,18 @@ EconomySim.Profiles = {
 		sellEvery = 120,
 		targetDrones = 3,
 		expansions = true,
+	},
+	-- Phase 5 : principalement automatisé avec le comptoir automatique (aucun aller-retour au marché après l'achat).
+	automatedSeller = {
+		name = "3 bis. Automatisé + comptoir automatique",
+		manual = true,
+		manualUntilDrones = 1,
+		reaction = 3.0,
+		moveTime = 1.5,
+		sellTrip = 8,
+		targetDrones = 3,
+		expansions = true,
+		autoSeller = true,
 	},
 	advanced = {
 		name = "4. Avancé (rebirths, prestige, améliorations)",
@@ -193,6 +206,7 @@ function EconomySim.new(profile, seed: number, data, frozen: boolean?)
 		events = {}, -- { kind, time, detail }
 		manualHarvests = 0,
 		droneHarvests = 0,
+		autoSales = 0,
 		coinsBySource = { player = 0, drone = 0 },
 	}
 	sim.data.farm.tiles = {}
@@ -217,6 +231,11 @@ local function harvest(sim, tileId: string, source: string): boolean
 		sim.manualHarvests += 1
 	else
 		sim.droneHarvests += 1
+	end
+	-- Comptoir automatique (Phase 5) : même règle pure que le serveur, appelée juste après chaque récolte.
+	local sale = Automation.autoSell(data, sim.now)
+	if sale then
+		sim.autoSales += 1
 	end
 	plant(sim, tileId)
 	return true
@@ -357,6 +376,11 @@ local function purchases(sim)
 		data.machines.drones[def.id] = DroneLogic.owned(data, def.id) + 1
 		rebuildFleet(sim)
 		table.insert(sim.events, { kind = "drone", time = sim.now, detail = tostring(data.machines.drones[def.id]) })
+	end
+	-- Comptoir automatique (Phase 5) dès le premier drone (règle pure du serveur ; à racheter après chaque rebirth).
+	if profile.autoSeller and DroneLogic.owned(data, "harvester") >= 1 and Automation.canBuySeller(data) then
+		assert(Automation.buySeller(data))
+		table.insert(sim.events, { kind = "autoSeller", time = sim.now, detail = "" })
 	end
 	-- Transitions (règles pures du serveur).
 	if profile.prestige and ProgressionMath.canPrestige(data) then
@@ -514,14 +538,16 @@ function EconomySim.eventTimes(sim, kind: string): { number }
 end
 
 -- Coins gagnés par minute en régime établi : une seule graine, aucun achat ni transition, `duration` s.
--- `plots` : parcelles possédées en plus de la parcelle de départ (ex. { "west" }).
+-- `plots` : parcelles possédées en plus de la parcelle de départ (ex. { "west" }) ; `prepare` : réglages
+-- supplémentaires de la donnée de départ (ex. comptoir automatique installé).
 function EconomySim.steadyIncome(
 	profile,
 	plantId: string,
 	drones: number,
 	duration: number,
 	seed: number,
-	plots: { string }?
+	plots: { string }?,
+	prepare: ((any) -> ())?
 ): number
 	local data = DataSchema.template(0)
 	data.seeds.unlocked[plantId] = true
@@ -531,6 +557,9 @@ function EconomySim.steadyIncome(
 	end
 	for _, plotId in plots or {} do
 		data.farm.plots[plotId] = true
+	end
+	if prepare then
+		prepare(data)
 	end
 	local sim = EconomySim.new(profile, seed, data, true)
 	while sim.now < duration do

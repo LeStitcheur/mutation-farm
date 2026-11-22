@@ -183,6 +183,18 @@ Simulations Lune également (pas de validation du vrai DataStore).
   en quarantaine ; au-delà du maximum plafonné ; table non tabulaire recréée).
 - `EconomySim.spec` : aucune amélioration normale ne réduit le revenu au niveau 1 ; Récoltes de qualité ≥ +5 %.
 
+### Ce qui est couvert hors Studio pour l'automatisation (Phase 5, jalon C)
+- `Automation.spec` (18 tests) : **comptoir** (débit exact, installé et activé ; achat rejoué ×10 ou sans fonds sans
+  modification ; perdu au rebirth et au prestige, réglages et statistiques conservés) ; **vente automatique** (seuils
+  50 / 75 / 100 % sur 40 et 50 places ; même valeur que le marché, Coins gagnés, statistiques ; pas de progression
+  des missions « vendre » ; comptoir coupé ou absent : rien) ; **concurrence vente manuelle / automatique** dans les
+  deux ordres (une seule vente, crédit unique) et récolte qui atteint le seuil ; **sac plein** (sans comptoir :
+  attente sans perte ; avec : vente puis reprise ; seuil abaissé : vente immédiate) ; **réglages** (validation
+  stricte, drones en pause = débit nul) ; **statistiques** (récoltes de drones seules) ; **transition de
+  progression** pendant une vente préparée ou une cible de drone ; **migration v5 -> v6 sans perte** (chaque champ
+  v5 comparé) ; **données corrompues** (6 chemins en quarantaine) ; sauvegarde puis rechargement.
+- `EconomySim.spec` : drones seuls, le comptoir rapporte au moins autant que des ventes toutes les 2 min.
+
 ### Ce qui n'est PAS couvert automatiquement
 Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
 → checklist ci-dessous, déroulée via Studio MCP (§3) ; ce qui exige un humain reste marqué comme tel.
@@ -469,6 +481,26 @@ touche U, vente par l'invite du marché (E), rebirth par `RebirthRequest` ; `Dev
 | Non-régression Essence | ✅ | Onglet Mutation Essence, Valeur de vente : 109 → 69 Essence, niveau 1/10 |
 | Console | ✅ | Aucune erreur des scripts du jeu |
 | Constat (Phase 4, non corrigé) | ◐ | Le bandeau d'un événement (« Pluie mutagène ») chevauche le haut d'un panneau ouvert ; titre lisible — suivi proposé |
+
+### 2.11 Phase 5, jalon C (automatisation) — validation Studio MCP du 2026-11-22 (Play solo, API désactivée)
+
+Boutons du panneau Automatisation cliqués, touche K, drones achetés à la station (E maintenue), rebirth par
+`RebirthRequest` ; `DevService` pour créditer des Coins.
+
+| Contrôle | Résultat | Observation |
+|---|---|---|
+| Démarrage | ✅ | « Serveur prêt (18 services) », schéma **v6**, réglages par défaut (drones actifs, vente coupée, 100 %) |
+| Panneau | ✅ | Touche K : comptoir « Installer : 5.00K Coins », seuils 50 / 75 / 100 %, drones, production (« 9 cases · 49 récoltes/min ») et statistiques |
+| Installation et seuil | ✅ | Clic : 40 000 → 35 000 Coins, comptoir installé et activé ; clic « 50 % » : seuil 50 |
+| Vente automatique | ✅ | 3 drones achetés (−14 625) ; 40 s : 31 récoltes de drones, 1 vente automatique de 20 objets (+250), sac jamais au-delà de 19 |
+| Pause des drones | ✅ | Clic « Actifs » → « En pause » : 0 récolte en 12 s, statut `paused` ×3, bulles « En pause » au-dessus des drones |
+| Sac plein | ✅ | Vente coupée : sac plein, drones `bag_full`, notification « Tes drones attendent : sac plein ! Réactive la vente automatique (panneau Automatisation). » |
+| Réactivation | ✅ | Clic « Coupé » → « Activé » : sac de 40 vendu aussitôt (sac 0, 3ᵉ vente automatique) ; les drones repartent à leur action suivante |
+| Triche | ✅ | Seuil 60, « 50 », NaN ; `drones` = 1 ; `autosell` = « non » ; action de 40 caractères ; table ; `buy_seller` ×2 (déjà installé) : aucun effet, aucune quarantaine |
+| Rebirth | ✅ | Comptoir et drones perdus ; réglages (seuil 50) et statistiques (95 récoltes de drones, 3 ventes, +1 000) conservés |
+| Console | ✅ | Aucune erreur des scripts du jeu |
+| Correctif d'affichage | ✅ | Ligne d'état du comptoir tronquée et statistiques petites : textes raccourcis, lignes de production agrandies (revérifié au jalon D, §2.12) |
+| Non vérifiable ici | ⛔ | Concurrence réelle vente au marché / comptoir à la même seconde (couverte en Lune), toucher, manette réelle |
 
 ## 3. Studio MCP (opération manuelle, recommandée)
 

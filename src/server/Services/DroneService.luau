@@ -20,6 +20,7 @@ local Shared = ReplicatedStorage.Shared
 local DroneConfig = require(Shared.Config.DroneConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local Types = require(Shared.Types)
+local Automation = require(Shared.Util.Automation)
 local BigNum = require(Shared.Util.BigNum)
 local DroneLogic = require(Shared.Util.DroneLogic)
 local Economy = require(Shared.Util.Economy)
@@ -34,7 +35,7 @@ local Notifier = require(script.Parent.Parent.Infra.Notifier)
 local RateLimiter = require(script.Parent.Parent.Infra.RateLimiter)
 
 type DroneDef = Types.DroneDef
-type DroneStatus = "idle" | "working" | "bag_full"
+type DroneStatus = "idle" | "working" | "bag_full" | "paused"
 
 type Drone = {
 	def: DroneDef,
@@ -246,6 +247,15 @@ local function tick()
 	for player, runtime in runtimes do
 		local data = DataService.GetData(player)
 		if not data or #runtime.drones == 0 then
+			continue
+		end
+		-- Drones mis en pause par le joueur (panneau Automatisation, Phase 5) : aucune récolte ; à la reprise, chaque
+		-- drone repart de son échéance (jamais de rattrapage des actions manquées).
+		if not Automation.dronesEnabled(data) then
+			for _, drone in runtime.drones do
+				setStatus(drone, "paused")
+				drone.nextAt = math.max(drone.nextAt, now)
+			end
 			continue
 		end
 		local reserved: { [string]: boolean } = {}

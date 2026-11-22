@@ -11,6 +11,7 @@ local UpgradeConfig = require(script.Parent.Parent.Config.UpgradeConfig)
 local MutadexConfig = require(script.Parent.Parent.Config.MutadexConfig)
 local PetConfig = require(script.Parent.Parent.Config.PetConfig)
 local QuestConfig = require(script.Parent.Parent.Config.QuestConfig)
+local AutomationConfig = require(script.Parent.Parent.Config.AutomationConfig)
 local BigNum = require(script.Parent.BigNum)
 local Deep = require(script.Parent.Deep)
 local Economy = require(script.Parent.Economy)
@@ -20,7 +21,7 @@ local FarmLayout = require(script.Parent.FarmLayout)
 type PlayerData = Types.PlayerData
 type Migration = (any) -> any
 
-local VERSION = 5
+local VERSION = 6
 local MAX_DEPTH = 16
 local MAX_LEGACY_PETS = 1000 -- v1–v3 : au-delà, un compteur d'exemplaires est jugé corrompu (laissé tel quel)
 
@@ -133,6 +134,14 @@ local MIGRATIONS: { [number]: Migration } = {
 	[5] = function(data: any): any
 		return data
 	end,
+	-- v6 (Phase 5, automatisation) : `machines.autoSeller` (comptoir non installé) et `automation` (réglages par
+	-- défaut : drones actifs, vente automatique coupée, seuil 100 % ; statistiques à zéro) sont ajoutés par la
+	-- réconciliation. Les drones déjà possédés restent actifs. Aucune transformation : rien d'existant n'est touché
+	-- ni supprimé ; une valeur inattendue (champ jamais écrit avant la v6, table `machines` corrompue) est remplacée
+	-- par la réconciliation et conservée en quarantaine.
+	[6] = function(data: any): any
+		return data
+	end,
 }
 
 local DataSchema = {
@@ -166,6 +175,17 @@ function DataSchema.template(now: number): PlayerData
 		},
 		machines = {
 			drones = {},
+			autoSeller = false,
+		},
+		automation = {
+			dronesEnabled = true,
+			autoSellEnabled = false,
+			autoSellThreshold = AutomationConfig.DefaultThreshold,
+			stats = {
+				droneHarvests = 0,
+				autoSells = 0,
+				autoSellCoins = BigNum.zero(),
+			},
 		},
 		progression = {
 			rebirths = 0,
@@ -569,6 +589,38 @@ function DataSchema.sanitize(data: PlayerData, now: number?): { string }
 			raw.boosts[key] = nil
 			quarantine(data, notes, "boosts." .. tostring(key), value, "boost invalide", at)
 		end
+	end
+
+	-- Automatisation (Phase 5, v6) : seuil parmi ceux proposés, statistiques entières et montant valide. Les booléens
+	-- (comptoir, réglages) d'un autre type ont déjà été remplacés par la réconciliation (quarantaine).
+	local automation = raw.automation
+	if not table.find(AutomationConfig.Thresholds, automation.autoSellThreshold) then
+		quarantine(
+			data,
+			notes,
+			"automation.autoSellThreshold",
+			automation.autoSellThreshold,
+			"seuil invalide -> défaut",
+			at
+		)
+		automation.autoSellThreshold = AutomationConfig.DefaultThreshold
+	end
+	for _, field in { "droneHarvests", "autoSells" } do
+		if not isNonNegativeInteger(automation.stats[field]) then
+			quarantine(data, notes, "automation.stats." .. field, automation.stats[field], "compteur invalide -> 0", at)
+			automation.stats[field] = 0
+		end
+	end
+	if not BigNum.isValid(automation.stats.autoSellCoins) or BigNum.isNegative(automation.stats.autoSellCoins) then
+		quarantine(
+			data,
+			notes,
+			"automation.stats.autoSellCoins",
+			automation.stats.autoSellCoins,
+			"montant invalide -> 0",
+			at
+		)
+		automation.stats.autoSellCoins = BigNum.zero()
 	end
 
 	-- Compteurs.

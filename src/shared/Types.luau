@@ -45,6 +45,13 @@ export type PlayerData = {
 	},
 	machines: {
 		drones: { [string]: number },
+		autoSeller: boolean, -- v6 : comptoir de vente automatique installé (machine : perdu au rebirth)
+	},
+	automation: { -- v6 : réglages du joueur (jamais réinitialisés) et statistiques de production automatique
+		dronesEnabled: boolean,
+		autoSellEnabled: boolean,
+		autoSellThreshold: number, -- % de la capacité du sac (AutomationConfig.Thresholds)
+		stats: AutomationStats,
 	},
 	progression: {
 		rebirths: number, -- rebirths depuis le dernier prestige (n des seuils, R du multiplicateur)
@@ -87,6 +94,22 @@ export type PlayerData = {
 		lastSeen: number,
 		quarantine: { QuarantineEntry }, -- données retirées par l'assainissement, conservées pour récupération
 	},
+}
+
+-- Statistiques de production automatique (Phase 5, jalon C ; historique, jamais réinitialisé).
+export type AutomationStats = {
+	droneHarvests: number, -- récoltes faites par les drones
+	autoSells: number, -- ventes du comptoir automatique
+	autoSellCoins: BigNum, -- Coins rapportés par le comptoir automatique
+}
+
+-- Réglages et statistiques d'automatisation répliqués au client (panneau Automatisation).
+export type ClientAutomation = {
+	sellerOwned: boolean,
+	dronesEnabled: boolean,
+	autoSellEnabled: boolean,
+	autoSellThreshold: number,
+	stats: AutomationStats,
 }
 
 -- Entrée du Mutadex : première découverte (horodatage serveur Unix) et nombre de récoltes de la combinaison.
@@ -176,6 +199,9 @@ export type ClientState = {
 	pets: ClientPets,
 	quests: { daily: QuestBoard, weekly: QuestBoard },
 	boosts: { [string]: number },
+	automation: ClientAutomation,
+	drones: { [string]: number }, -- drones possédés par type (panneau Automatisation)
+	plots: { [string]: boolean }, -- parcelles possédées (débits du panneau Automatisation)
 	harvests: number,
 	perfectHarvests: number,
 }

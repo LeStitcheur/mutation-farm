@@ -21,6 +21,7 @@ local ProgressionService = require(Services.ProgressionService)
 local RebirthService = require(Services.RebirthService)
 local PrestigeService = require(Services.PrestigeService)
 local UpgradeService = require(Services.UpgradeService)
+local AutomationService = require(Services.AutomationService)
 local PetService = require(Services.PetService)
 local QuestService = require(Services.QuestService)
 local DevService = require(Services.DevService)
@@ -47,6 +48,7 @@ local ordered: { { name: string, service: Service } } = {
 	{ name = "RebirthService", service = RebirthService },
 	{ name = "PrestigeService", service = PrestigeService },
 	{ name = "UpgradeService", service = UpgradeService },
+	{ name = "AutomationService", service = AutomationService }, -- comptoir automatique, réglages (Phase 5)
 	{ name = "PetService", service = PetService },
 	{ name = "QuestService", service = QuestService },
 	{ name = "DevService", service = DevService }, -- Studio uniquement (outils de test MCP)

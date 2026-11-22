@@ -270,4 +270,76 @@ return function()
 			)
 		end
 	end
+
+	-- J. Automatisation : comptoir de vente automatique.
+	print("\n## J1. Premier rebirth : profil automatisé, ventes manuelles toutes les 2 min / comptoir automatique\n")
+	print("| Profil | Premier rebirth | Ventes du comptoir (moyenne) |")
+	print("|---|---|---|")
+	for _, key in { "automated", "automatedSeller" } do
+		local sales = {}
+		local avg = averaged(function(seed)
+			local sim = EconomySim.new(profiles[key], seed)
+			local t = EconomySim.runUntil(sim, eligible, 4 * 3600)
+			table.insert(sales, sim.autoSales)
+			return t
+		end)
+		print(string.format("| %s | %s | %.1f |", profiles[key].name, minutes(avg), mean(sales) or 0))
+	end
+
+	print("\n## J2. 3 drones seuls, 10 min (Coins/min) : qui vend le sac ?\n")
+	print(
+		"| Graine | Personne (drones arrêtés sac plein) | Ventes toutes les 2 min | Comptoir à 100 % | Comptoir à 50 % |"
+	)
+	print("|---|---|---|---|---|")
+	local nobody = { name = "personne", manual = false, sellTrip = 1e9, sellEvery = 1e9, targetDrones = 3 }
+	local periodic = { name = "toutes les 2 min", manual = false, sellTrip = 8, sellEvery = 120, targetDrones = 3 }
+	local function withSeller(percent: number)
+		return function(data)
+			data.machines.autoSeller = true
+			data.automation.autoSellEnabled = true
+			data.automation.autoSellThreshold = percent
+		end
+	end
+	for _, plantId in { "carrot", "tomato", "pumpkin", "moonshroom" } do
+		local plant = assert(PlantConfig.get(plantId))
+		local cells = {}
+		for _, case in
+			{
+				{ nobody, nil },
+				{ periodic, nil },
+				{ nobody, withSeller(100) },
+				{ nobody, withSeller(50) },
+			}
+		do
+			local rate = averaged(function(seed)
+				return EconomySim.steadyIncome(case[1], plantId, 3, 600, seed, nil, case[2])
+			end)
+			table.insert(cells, string.format("%.0f", rate or 0))
+		end
+		print(string.format("| %s | %s |", plant.name, table.concat(cells, " | ")))
+	end
+
+	print("\n## J3. Profil 4 (avancé) : premier prestige sans / avec comptoir automatique\n")
+	local plainTimes, sellerTimes = {}, {}
+	for _, seed in SEEDS do
+		local t0 = prestigeRun(profiles.advanced, seed)
+		if t0 then
+			table.insert(plainTimes, t0)
+		end
+		local t1 = prestigeRun(EconomySim.variant(profiles.advanced, { autoSeller = true }), seed)
+		if t1 then
+			table.insert(sellerTimes, t1)
+		end
+	end
+	print(
+		string.format(
+			"Premier prestige : sans comptoir %s (%d/%d), avec comptoir %s (%d/%d).",
+			minutes(mean(plainTimes)),
+			#plainTimes,
+			#SEEDS,
+			minutes(mean(sellerTimes)),
+			#sellerTimes,
+			#SEEDS
+		)
+	)
 end
