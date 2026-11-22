@@ -122,6 +122,9 @@ L'ancien contrat Phase 5 (coût `5·10⁷ × 6ⁿ`, multiplicateur `1,5ⁿ`, Reb
 17. Comptoir automatique (Phase 5) : même valeur que le marché, jamais deux ventes du même objet (manuelle et
     automatique, dans les deux ordres), perdu au rebirth (`Automation.spec`) ; drones seuls, il rapporte au moins
     autant que des ventes manuelles toutes les 2 min (`EconomySim.spec`).
+18. Production hors ligne (Phase 5) : au plus 7 200 s comptées par absence, rien sous 60 s, chaque période comptée
+    une seule fois (reconnexions répétées, sauvegarde puis rechargement), aucun gain d'un horodatage futur ou d'une
+    révision périmée, mêmes récoltes que la boucle des drones en ligne (±2 %) (`Offline.spec`).
 
 ## 6. Grands nombres
 
@@ -201,6 +204,12 @@ tools/bin/lune.exe run tests/run.luau report
 (profil 4 poursuivi). Tous débloquent la graine suivante dès qu'elle est payable et vont vendre dès que le sac est
 plein ou que son contenu paie leur prochain achat. **Chaque valeur est la moyenne de 8 parties** (graines 1 à 8) :
 une partie seule est trop sensible aux mutations rares et à l'instant des déblocages.
+
+**Phase 5** : les tables A à G ci-dessous ont été mesurées en fin de Phase 4, **sans** extensions de ferme ni
+améliorations normales ni comptoir (`tools/bin/lune.exe run tests/run.luau report`). Depuis la Phase 5, les profils
+achètent les extensions utiles et le profil avancé achète aussi les améliorations normales : premier rebirth
+inchangé (aucune extension n'est payable avant), premier prestige ≈ **1 h 44** au lieu de 2 h 37 — mesures et
+comparaisons dans les §12 à §15 (`report phase5`).
 
 **Évolutions du modèle (Phase 4)**, rendues nécessaires par le Mutadex (ses places de sac modifiaient le rythme des
 ventes et faisaient apparaître des artefacts) — les tables ci-dessous ont été **remesurées avec ce modèle en fin de
@@ -489,3 +498,30 @@ Lecture :
 - Le seuil (50 ou 100 %) ne change pas le revenu (même règle de vente) ; il règle seulement la fréquence des ventes
   et la place laissée libre pour les récoltes manuelles.
 - Le comptoir est la condition d'une production hors ligne au-delà d'un sac plein (§15).
+
+## 15. Production hors ligne (Phase 5, jalon D ; modèle et écarts : `docs/AUTOMATION.md` §8)
+
+Plafond **2 h** (`GameConfig.Offline.MaxSeconds = 7200`), seulement par les drones actifs (et le comptoir s'il est
+installé) ; absence de moins de 60 s : rien. Mesures (`report phase5`, section K : 3 drones, 18 cases, absence de
+2 h, cultures plantées à la déconnexion ; « en ligne simulé » = même ferme rejouée au pas de 0,25 s) :
+
+| Graine | Sans comptoir : valeur du sac plein | Hors ligne avec comptoir (Coins) | En ligne simulé, comptoir | Écart | Calcul (ms, Lune) |
+|---|---|---|---|---|---|
+| Carotte | 450 | 80 560 | 80 285 | +0,3 % | 287 |
+| Tomate | 2 025 | 362 520 | 360 922 | +0,4 % | 237 |
+| Citrouille | 24 750 | 2 674 100 | 2 681 800 | −0,3 % | 149 |
+| Champi-lune | 90 000 | 6 105 000 | 5 813 000 | +5,0 % | 110 |
+| Fleur-étoile | 292 500 | 13 029 250 | 12 957 750 | +0,6 % | 63 |
+
+Lecture :
+- Le modèle rejoue exactement les règles en ligne : la production hors ligne égale celle d'une session où le joueur
+  laisse ses drones et son comptoir travailler seuls (écarts de ±0,5 %, jusqu'à 5 % avec les graines lentes où
+  quelques mutations rares pèsent lourd ; le dernier lot non vendu reste dans le sac).
+- Sans comptoir, l'absence ne rapporte qu'un sac plein (40 à 140 objets, vendus au retour) : le comptoir est la
+  condition d'une vraie production hors ligne, ce qui lui donne son intérêt pour les joueurs qui jouent peu.
+- 2 h d'absence valent au plus 2 h de production automatisée d'une session active, jamais plus : se déconnecter
+  n'est jamais plus rentable que rester connecté, et rester connecté avec un joueur présent rapporte davantage
+  (bonus de précision, événements, ventes manuelles).
+- Coût : pire cas mesuré (3 drones à l'intervalle minimal, 36 cases de Carotte, comptoir) ≈ 9 000 récoltes en
+  ≈ 360 ms (Lune) ; sur le serveur, le calcul se fait au chargement du profil, avant qu'il ne devienne actif, avec
+  une pause toutes les 500 actions de drone (aucun blocage du serveur).

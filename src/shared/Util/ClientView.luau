@@ -44,6 +44,11 @@ function ClientView.build(data: Types.PlayerData): Types.ClientState
 			autoSellThreshold = data.automation.autoSellThreshold,
 			stats = data.automation.stats,
 		},
+		offline = {
+			report = data.offline.report,
+			totalSeconds = data.offline.totalSeconds,
+			totalCoins = data.offline.totalCoins,
+		},
 		drones = data.machines.drones,
 		plots = data.farm.plots,
 		harvests = data.stats.harvests,

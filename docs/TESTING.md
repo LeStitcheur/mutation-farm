@@ -195,6 +195,20 @@ Simulations Lune également (pas de validation du vrai DataStore).
   v5 comparé) ; **données corrompues** (6 chemins en quarantaine) ; sauvegarde puis rechargement.
 - `EconomySim.spec` : drones seuls, le comptoir rapporte au moins autant que des ventes toutes les 2 min.
 
+### Ce qui est couvert hors Studio pour la production hors ligne (Phase 5, jalon D)
+- `Offline.spec` (22 tests) : **fenêtre** (plafond de 2 h ; départ au plus récent de la dernière sauvegarde et du
+  dernier règlement ; horodatage futur ou invalide : aucune absence) ; **production réellement automatisable**
+  (absence < 60 s : rien ; sans drone ou drones en pause : rien, écran de conseil au-delà de 10 min ; un drone avec
+  comptoir : 1 récolte / 4 s, tout vendu au prix du marché, Coins gagnés ; sans comptoir : arrêt sac plein sans perte ;
+  capacité du sac et bonus équipés ; **délai de grâce** respecté ; cultures replantées dans la fenêtre avec la graine
+  sélectionnée) ; **absence de 10 h = production de 2 h** ; **idempotence** (second règlement au même instant) ;
+  **reconnexions répétées** (30 sessions courtes : aucun gain, puis une heure comptée une fois) ; **déconnexion /
+  reconnexion via la sauvegarde** (chaque période comptée une seule fois, y compris après un arrêt sans écriture) ;
+  **révision périmée** : aucune récompense de l'ancien cycle ; **cohérence** avec la boucle des drones simulée au pas
+  de 0,25 s (±2 %) ; **écran** (durée, plafond, gains, conseils) ; **pauses coopératives** sans effet sur le
+  résultat ; **migration v6 -> v7 sans perte** ; **données corrompues** (4 chemins en quarantaine) ; sauvegarde puis
+  rechargement ; **coût du pire cas** mesuré (≈ 9 000 récoltes, ≈ 360 ms en Lune).
+
 ### Ce qui n'est PAS couvert automatiquement
 Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
 → checklist ci-dessous, déroulée via Studio MCP (§3) ; ce qui exige un humain reste marqué comme tel.
@@ -335,6 +349,11 @@ fenêtres de test sont visibles par le MCP). Ne cocher qu'après exécution rée
 | **Familiers : persistance réelle** (Phase 4) | Comme « Sauvegarde réelle » | Éclosion puis arrêt brutal du serveur : le familier est présent au retour (sauvegarde avant confirmation) ; équipement, niveaux et œufs gratuits restaurés après changement de serveur |
 | **Familiers : performance mobile** (Phase 4) | Appareil d'entrée de gamme, 3 familiers équipés, plusieurs joueurs | Images par seconde stables, familiers qui suivent sans saccade, aucune erreur ; panneau Familiers lisible (*Test › Device*) ; manette : L3 ouvre, B ferme |
 | **Mutadex : mobile et manette** (Phase 4) | *Test › Device* ; manette branchée | Menu en grille lisible sans chevauchement avec le chat ; panneau ajusté, cartes défilables au doigt ; R2 ouvre, croix pour parcourir filtres et cartes (défilement automatique), B ferme |
+| **Extensions : 2 joueurs** (Phase 5) | *Test › Clients and Servers*, 2 joueurs | Joueur B devant un panneau « À vendre » de A : « Cette parcelle appartient à une autre ferme. », Coins de B et parcelles de A inchangés ; chacun récolte seulement ses extensions ; fermes voisines sans chevauchement visible |
+| **Extensions et améliorations : persistance réelle** (Phase 5) | Comme « Sauvegarde réelle » | Extensions, niveaux des améliorations normales, comptoir et réglages d'automatisation restaurés après Stop / Play ; extensions conservées après un rebirth réel, reprises après un prestige réel |
+| **Hors ligne : reconnexion réelle** (Phase 5) | Place publiée **avec accord**, accès API ; 3 drones et comptoir ; quitter le jeu 10 min puis revenir (puis 3 h) | Écran « Pendant ton absence » : 10 min comptées (puis « 2 h (plafond de 2 h) ») ; Coins cohérents avec ≈ 45 récoltes/min ; revenir 20 s plus tard : aucun écran, aucun gain ; changer de serveur juste après : aucun second gain |
+| **Hors ligne : sans comptoir et sans drone** (Phase 5) | Comme ci-dessus | Sans comptoir : drones arrêtés sac plein, objets au retour, aucun Coin ; sans drone (absence > 10 min) : écran de conseil, aucun gain |
+| **Automatisation et extensions : mobile et manette** (Phase 5) | *Test › Device* ; manette | Panneau Automatisation lisible (menu à 8 boutons sans chevauchement), boutons utilisables au toucher ; croix droite ouvre, B ferme ; invites « À vendre » au toucher (appui 0,5 s) et à la manette (X) ; escalier de la terrasse praticable au joystick ; écran « Pendant ton absence » : A / B ferment |
 
 ### 2.5 Phase 3, jalon A (rebirth) — validation Studio MCP du 2026-11-21 (Play solo, API désactivée)
 
@@ -501,6 +520,29 @@ Boutons du panneau Automatisation cliqués, touche K, drones achetés à la stat
 | Console | ✅ | Aucune erreur des scripts du jeu |
 | Correctif d'affichage | ✅ | Ligne d'état du comptoir tronquée et statistiques petites : textes raccourcis, lignes de production agrandies (revérifié au jalon D, §2.12) |
 | Non vérifiable ici | ⛔ | Concurrence réelle vente au marché / comptoir à la même seconde (couverte en Lune), toucher, manette réelle |
+
+### 2.12 Phase 5, jalon D (production hors ligne) — validation Studio MCP du 2026-11-22 (Play solo, API désactivée)
+
+**Absences SIMULÉES** : sans place publiée, aucune vraie déconnexion / reconnexion avec le DataStore n'est possible
+(store en mémoire, remis à zéro à chaque Stop). Deux chemins ont été exercés avec le vrai code serveur :
+(1) le **chemin de chargement** (`DataService.AddLoadStep` → `OfflineService`), avec l'attribut Studio
+`ServerStorage.MutationFarmDevOfflineAway` posé en mode Édition sur la copie locale de la place (absence de 3 h au
+chargement) ; (2) la **même règle** sur le profil en jeu (`DevService` `offlineSimulate` : dernière sauvegarde et
+cultures reculées). Achats par les vraies invites et le remote `AutomationRequest` ; écran fermé par clic et par B.
+
+| Contrôle | Résultat | Observation |
+|---|---|---|
+| Démarrage | ✅ | « Serveur prêt (19 services) », schéma **v7** ; démarrage normal (sans attribut) : bilan « none », aucun écran |
+| Chemin de chargement, sans drone | ✅ (simulé) | Absence de 3 h au chargement : écran « Absent 3 h : aucun drone, rien n'a été récolté » + conseil ; « Super ! » → `report.seen = true`, écran masqué ; rien n'est compté (`countedSeconds = 0`) |
+| 3 h avec ouest, comptoir et 3 drones | ✅ (simulé) | 7 200 s comptées (plafond), **5 400 récoltes** (= 3 × 7 200 / 4), 135 ventes, **+79 250 Coins** (122 555 → 201 805), 18 objets au sac, 18/18 cultures replantées dans la fenêtre ; calcul 97 ms (profil en jeu, sans pause) |
+| Écran | ✅ | « Absent 3 h · production comptée : 2 h (plafond de 2 h) », « Tes drones ont récolté 5.40K plante(s) », « Le comptoir a vendu 135 fois : +79.2K Coins », « Ajouté à ton sac : 18 objet(s) » ; fermé par **B** (manette simulée) → lu |
+| Absence trop courte | ✅ (simulé) | 30 s : `too_short`, aucune récolte, aucun écran, bilan et totaux inchangés |
+| Sans comptoir (vente coupée, sac déjà plein) | ✅ (simulé) | 0 récolte, `stoppedBagFull`, Coins et sac (40/40) inchangés ; écran « Ton sac s'est rempli : tes drones se sont arrêtés… » |
+| Panneau Automatisation | ✅ | Ligne « Hors ligne : 3 h comptées au total · +79.2K Coins (2 h au plus par absence) » ; textes du jalon C revérifiés (plus de troncature) |
+| Stabilité | ✅ | Session de jeu restée ouverte plusieurs heures (3 drones + comptoir) : ≈ 13 600 récoltes de drones et 341 ventes automatiques, aucune erreur |
+| Console | ✅ | Aucune erreur des scripts du jeu ; journaux `[OfflineService]` attendus |
+| Défaut trouvé (outil de test) | ✅ | 1ʳᵉ simulation : 0 récolte, car seul l'horodatage de sauvegarde reculait (cultures « dans le futur ») ; l'outil Studio recule désormais aussi les cultures (en vraie absence, elles sont toujours antérieures à la sauvegarde ; la règle et les tests Lune n'étaient pas en cause) |
+| Non vérifiable ici | ⛔ | Vraie reconnexion avec le DataStore, changement de serveur, arrêt brutal du serveur pendant le calcul — protocole §2.4 (place publiée **avec accord** seulement) |
 
 ## 3. Studio MCP (opération manuelle, recommandée)
 

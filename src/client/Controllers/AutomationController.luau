@@ -194,6 +194,18 @@ local function render(state: Types.ClientState)
 			)
 		end
 	end
+	-- Production hors ligne (Phase 5, jalon D) : totaux depuis toujours (2 h au plus par absence).
+	local offline = state.offline
+	if offline then
+		table.insert(
+			lines,
+			string.format(
+				"Hors ligne : %s comptées au total · +%s Coins (2 h au plus par absence)",
+				Format.duration(offline.totalSeconds or 0),
+				Format.bigNum(BigNum.sanitize(offline.totalCoins))
+			)
+		)
+	end
 	current.production.Text = table.concat(lines, "\n")
 end
 

@@ -197,7 +197,19 @@ Cahier des charges du 2026-11-22. Branche empilée sur `phase-4/content-retentio
       `docs/ECONOMY.md` §14
 - [x] Validation Studio MCP (`docs/TESTING.md` §2.11)
 - [ ] Manuel : toucher, manette, persistance réelle (`docs/TESTING.md` §2.4)
-**Jalon D — Production hors ligne** — à venir
+**Jalon D — Production hors ligne (implémenté, validé en Studio le 2026-11-22 par absences simulées)**
+- [x] Calcul serveur au chargement (`DataService.AddLoadStep`, avant que le profil ne devienne vivant), sur une copie,
+      plafonné à 2 h, rien sous 60 s ; horodatages serveur uniquement ; idempotent (`offline.settledAt`) ; révision
+      de progression vérifiée
+- [x] Aucune simulation image par image : actions des drones rejouées d'une échéance à la suivante avec les règles
+      en ligne (`HarvestRules`, comptoir, sac, bonus équipés, délai de grâce de 5 s), pauses toutes les 500 actions
+- [x] Écran « Pendant ton absence » (durée d'absence, durée comptée, récoltes, ventes, Coins, sac, conseils) ;
+      totaux dans le panneau Automatisation
+- [x] Schéma v7 + migration v6 -> v7 sans perte ; tests Lune : 370 (dont `Offline.spec` 22) ; mesures
+      `docs/ECONOMY.md` §15 (même production qu'en ligne à ±0,5 %) ; hypothèses et écarts `docs/AUTOMATION.md` §8
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.12) — absences **simulées** (horodatages reculés)
+- [ ] Manuel : vraie déconnexion / reconnexion avec le DataStore (place publiée avec accord), changement de serveur
+      (`docs/TESTING.md` §2.4)
 
 Rebirth & Prestige : avancés en Phase 3. Floraison dorée : Phase 4, jalon C.
 

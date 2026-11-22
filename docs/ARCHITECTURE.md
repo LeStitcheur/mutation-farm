@@ -27,7 +27,7 @@ src/
     Util/                 Logique pure : BigNum, Format, Growth, Economy, Inventory, MutationRoll,
                           DataSchema, Resets, FarmLayout, ClientView, Signal, Deep, SessionLock, SlotAllocator,
                           HarvestRules, DroneLogic, ProgressionMath, Upgrades, Mutadex, Pets, WorldEvents, Quests,
-                          Hash, Expansions, Selling, Automation,
+                          Hash, Expansions, Selling, Automation, Offline,
                           Bonuses (agrégation améliorations × familiers sous les plafonds globaux)
   server/   -> ServerScriptService.Server
     init.server.luau      Bootstrap des services
@@ -35,7 +35,7 @@ src/
     Infra/                DataStoreAdapter, RateLimiter, Notifier, QuestNotifier
     Services/             DataService, EconomyService, PlantService, MutationService, FarmService, HarvestService,
                           DroneService, ProgressionService, RebirthService, PrestigeService,
-                          UpgradeService, AutomationService, MutadexService, PetService, EventService, QuestService,
+                          UpgradeService, AutomationService, OfflineService, MutadexService, PetService, EventService, QuestService,
                           DevService (Studio uniquement),
                           SyncService
   client/   -> StarterPlayer.StarterPlayerScripts.Client
@@ -44,7 +44,7 @@ src/
                           MutadexController, PetController, EventController, QuestController, PlantRenderer,
                           HarvestController,
                           DroneRenderer,
-                          PetRenderer (familiers de tous les joueurs, rendu local), AutomationController
+                          PetRenderer (familiers de tous les joueurs, rendu local), AutomationController, OfflineController
                           (menu latéral : grille de 2 colonnes, boutons ajoutés par les contrôleurs)
     UI/                   Theme, Builder, PanelHub (un panneau à la fois, chat masqué),
                           ModalPanel (base des panneaux du menu : bouton, touches, échelle, X / B, PanelHub),
@@ -74,7 +74,7 @@ dépend de ces trois derniers.)
 
 | Service | Responsabilité | API publique principale |
 |---|---|---|
-| **DataService** | Chargement/sauvegarde, verrou de session, autosave, migrations | `GetData`, `Update`, `IsLoaded`, `SaveNow`, signaux `ProfileLoaded`, `ProfileReleasing`, `Changed` |
+| **DataService** | Chargement/sauvegarde, verrou de session, autosave, migrations ; étapes de chargement (Phase 5) appliquées avant que le profil ne devienne vivant | `GetData`, `Update`, `IsLoaded`, `SaveNow`, `AddLoadStep`, signaux `ProfileLoaded`, `ProfileReleasing`, `Changed` |
 | **EconomyService** | Coins, vente du sac (× multiplicateur de revenu rebirth × prestige, calculé dans le mutateur) ; tout gain alimente l'historique et les cycles (`ProgressionMath.recordEarnings`) ; vente au marché et comptoir automatique (Phase 5) par la même règle pure `Selling.sellBag`, chacune dans son mutateur (jamais deux ventes du même objet) | `AddCoins`, `TrySpendCoins`, `SellAll`, `AutoSell` |
 | **PlantService** | Graines (déblocage, sélection), durée de pousse effective | `GetSelectedSeed`, `ComputeGrowTime`, `UnlockSeed`, `SelectSeed` |
 | **FarmService** | Fermes (attribution, construction), état des cases, replantation ; **extensions** (Phase 5) : chaque parcelle construite ou démontée selon `farm.plots` (`SyncPlots` : chargement, achat, rebirth / prestige), panneaux « À vendre » à invite serveur, achat `Expansions.purchase` dans un mutateur ; personnages posés sur un socle de terrasse qui apparaît | `PlantTile`, `ReplantEmpty`, `SyncPlots`, `BuyPlot`, `GetTilePart`, `OwnsTile`, `GetPlotModel`, `GetPlotOrigin`, signal `PlotReady` |
@@ -92,6 +92,7 @@ dépend de ces trois derniers.)
 | **QuestService** | Missions (Phase 4, jalon D) : tirage déterministe par joueur et période (au chargement, puis contrôle toutes les 15 s), **sauvegardé** (aucun nouveau tirage en changeant de serveur) ; récupération `QuestClaim` validée et unique (`Quests.claim` dans un mutateur) ; annonces des missions terminées (récoltes via `HarvestService.Harvested` ; ventes, éclosions et rebirths via `Infra/QuestNotifier` dans leurs services) | `Refresh`, `Claim`, `Record` (Studio) |
 | **DevService** | Outils de test **Studio uniquement** (`RunService:IsStudio()`) : `ServerStorage.MutationFarmDev` (BindableFunction, inaccessible aux clients) — `grantEarned`, `snapshot` | — |
 | **AutomationService** | Automatisation (Phase 5, jalon C) : remote `AutomationRequest` validé (action, valeur, débit, aucune transition), achat du comptoir automatique et réglages (`Automation`, un mutateur), vente immédiate si le seuil est déjà atteint | `BuySeller`, `SetSetting` |
+| **OfflineService** | Production hors ligne (Phase 5, jalon D) : étape de chargement (`DataService.AddLoadStep`) qui règle l'absence sur une copie du profil avant qu'il ne devienne vivant (`Offline.settle`, pause toutes les 500 actions de drone, tirages `MutationService`) ; remote `OfflineReportSeen` | `SettleLive` (Studio) |
 | *PurchaseService* | Phase 6 | |
 
 Convention : chaque module service expose `Init()` (connexions, création d'instances) et `Start()` (boucles,
@@ -112,6 +113,7 @@ traitement des joueurs). `DataService.Start` est appelé en **dernier** pour que
 | `PetEquip` / `PetUnequip` / `PetRelease` | C→S | `instanceId: string` | chaîne 1..32, 5 req/s, aucune transition ; instance existante et active (équiper : < 3 équipés ; relâcher : non équipée) |
 | `QuestClaim` | C→S | `missionId: string` | chaîne 1..32, 4 req/s, aucune transition ; mission connue de la période courante, terminée, non récupérée (sinon sans effet) |
 | `AutomationRequest` | C→S | `action: string`, `value` (booléen ou nombre selon l'action) | chaîne 1..16 parmi `buy_seller` / `drones` / `autosell` / `threshold`, booléen pour les interrupteurs, nombre fini pour le seuil (50, 75, 100), 4 req/s, aucune transition ; comptoir non possédé et Coins ≥ prix (achat) |
+| `OfflineReportSeen` | C→S | — (aucune charge utile) | 1 req/s ; marque lu le bilan « Pendant ton absence » (aucun effet sur les gains) |
 | `StateSync` | S→C | `ClientState` | — |
 | `PetHatched` | S→C | `{ eggId, instanceId, petId, saved }` — **après** la tentative de sauvegarde | — |
 | `HarvestResult` | S→C | `{ tileId, plantId, mutation, tier, bonus, source, discovered, eventBonus }` (`source` : `"player"` / `"drone"` ; `discovered` : première récolte de la combinaison au Mutadex ; `eventBonus` : part de valeur de la Floraison dorée versée à la récolte) | — |
@@ -157,8 +159,9 @@ Aucune `RemoteFunction` serveur→client.
 
 - Horloge unique : `workspace:GetServerTimeNow()` (secondes Unix, synchronisée client/serveur).
 - `growTime` est figé à la plantation (les bonus futurs ne modifient pas les cultures en cours).
-- La croissance continue hors ligne (timestamps). La production **automatisée** hors ligne (Phase 4) sera simulée de
-  façon agrégée sur `min(now − meta.lastSeen, 7200 s)`.
+- La croissance continue hors ligne (timestamps). La production **automatisée** hors ligne (Phase 5, jalon D) est
+  réglée au chargement sur `[max(meta.lastSeen, offline.settledAt), now]`, plafonnée à 7 200 s, en rejouant les
+  actions des drones d'une échéance à la suivante (`Offline.settle`, détail : `docs/AUTOMATION.md` §8).
 
 ## 7. Persistance (DataService)
 
@@ -174,7 +177,7 @@ multi-serveurs ; `DataService` ne fait que les appliquer dans `UpdateAsync`)
 1. **Chargement** : `UpdateAsync` ; si `session` appartient à un autre serveur et `heartbeat` < 120 s → verrou actif,
    la transformation retourne `nil` (aucune écriture), nouvelle tentative toutes les 5 s jusqu'à 130 s puis kick.
    Sinon on écrit notre `session` (vol du verrou périmé) et on lit `data`.
-2. **Migration** : `DataSchema.load` → migrations `version → VERSION` (schéma **v6** depuis la Phase 5, jalon C), réconciliation
+2. **Migration** : `DataSchema.load` → migrations `version → VERSION` (schéma **v7** depuis la Phase 5, jalon D), réconciliation
    avec le gabarit (valeurs d'un type incompatible consignées), assainissement : toute valeur retirée, remplacée ou
    corrigée part en quarantaine (`meta.quarantine`), jamais supprimée silencieusement — voir
    `docs/DATA_MIGRATIONS.md`. Une version **future** (serveur obsolète) refuse le

@@ -114,7 +114,8 @@ Coûts exponentiels : voir `docs/ECONOMY.md`.
   « drone collecteur » prévu à l'origine est abandonné : les récoltes vont directement dans le sac, il n'y a rien à
   collecter.
 - Réglages : drones actifs ou en pause, vente automatique, seuil ; statistiques de production automatique.
-- Production **hors ligne** plafonnée à **2 heures** (Phase 5, jalon D).
+- Production **hors ligne** plafonnée à **2 heures** (Phase 5, jalon D) : les drones actifs et le comptoir rejoués au
+  chargement ; écran « Pendant ton absence » (`docs/AUTOMATION.md` §8).
 
 ## 11. Familiers [V1.1]
 

@@ -342,4 +342,81 @@ return function()
 			#SEEDS
 		)
 	)
+
+	-- K. Production hors ligne (2 h) comparée à la même durée simulée en ligne au pas de 0,25 s.
+	print("\n## K. Production hors ligne : 3 drones, 18 cases, absence de 2 h (Coins gagnés, moyenne de 2 parties)\n")
+	print(
+		"| Graine | Sans comptoir : valeur du sac plein | Hors ligne, comptoir | En ligne simulé, comptoir | Écart | Calcul (ms) |"
+	)
+	print("|---|---|---|---|---|---|")
+	local Offline = require(Shared.Util.Offline)
+	local DataSchemaK = require(Shared.Util.DataSchema)
+	local BigNumK = require(Shared.Util.BigNum)
+	local MutationRoll = require(Shared.Util.MutationRoll)
+	local MutationOdds = require(game:GetService("ServerScriptService").Server.Config.MutationOdds)
+	local WINDOW = 7200
+	local function prepared(plantId: string, seller: boolean)
+		local data = DataSchemaK.template(0)
+		data.seeds.unlocked[plantId] = true
+		data.seeds.selected = plantId
+		data.machines.drones.harvester = 3
+		data.farm.plots.west = true
+		if seller then
+			data.machines.autoSeller = true
+			data.automation.autoSellEnabled = true
+		end
+		return data
+	end
+	for _, plantId in { "carrot", "tomato", "pumpkin", "moonshroom", "starbloom" } do
+		local plant = assert(PlantConfig.get(plantId))
+		local results = { off = {}, offSeller = {}, live = {}, ms = {} }
+		for _, seed in { 1, 2 } do
+			math.randomseed(seed)
+			local function roll(luck: number): string
+				return MutationRoll.pick(MutationRoll.applyLuck(MutationOdds.Weights, luck), math.random())
+			end
+			for _, seller in { false, true } do
+				local data = prepared(plantId, seller)
+				-- Cultures plantées à la déconnexion (t = 0), comme la simulation en ligne qui replante tout à t = 0.
+				for _, tileId in { "main", "west" } do
+					for index = 1, 9 do
+						data.farm.tiles[tileId .. ":" .. index] =
+							{ plantId = plantId, plantedAt = 0, growTime = plant.growTime }
+					end
+				end
+				data.meta.lastSeen = 0
+				local started = os.clock()
+				local report = Offline.settle(data, WINDOW, { roll = roll })
+				local value = if seller
+					then report.coins
+					else Economy.sellValue(data.bag.items, ProgressionMath.incomeMultiplier(data))
+				table.insert(if seller then results.offSeller else results.off, BigNumK.toNumber(value))
+				if seller then
+					table.insert(results.ms, (os.clock() - started) * 1000)
+				end
+			end
+			local nobody = { name = "drones", manual = false, sellTrip = 1e9, sellEvery = 1e9, targetDrones = 3 }
+			local rate = EconomySim.steadyIncome(nobody, plantId, 3, WINDOW, seed, { "west" }, function(data)
+				data.machines.autoSeller = true
+				data.automation.autoSellEnabled = true
+			end)
+			table.insert(results.live, rate * WINDOW / 60)
+		end
+		local off, offSeller, live = mean(results.off) or 0, mean(results.offSeller) or 0, mean(results.live) or 0
+		print(
+			string.format(
+				"| %s | %.0f | %.0f | %.0f | %+.1f %% | %.0f |",
+				plant.name,
+				off,
+				offSeller,
+				live,
+				if live > 0 then 100 * (offSeller / live - 1) else 0,
+				mean(results.ms) or 0
+			)
+		)
+	end
+	print(
+		"\nÉcart : le hors ligne ne vend pas le dernier lot resté dans le sac (compté en « en ligne » par la vente finale"
+			.. " de la simulation) et ses tirages de mutation suivent un autre flux aléatoire."
+	)
 end

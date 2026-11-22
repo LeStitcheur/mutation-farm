@@ -20,6 +20,7 @@ local PetController = require(Controllers.PetController)
 local EventController = require(Controllers.EventController)
 local QuestController = require(Controllers.QuestController)
 local AutomationController = require(Controllers.AutomationController)
+local OfflineController = require(Controllers.OfflineController)
 local PlantRenderer = require(Controllers.PlantRenderer)
 local PetRenderer = require(Controllers.PetRenderer)
 local HarvestController = require(Controllers.HarvestController)
@@ -41,6 +42,7 @@ local ordered: { Controller } = {
 	EventController,
 	QuestController,
 	AutomationController,
+	OfflineController, -- écran « Pendant ton absence » (après les panneaux : PanelHub)
 	PlantRenderer,
 	HarvestController,
 	DroneRenderer,

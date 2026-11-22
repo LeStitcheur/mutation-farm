@@ -21,7 +21,7 @@ local FarmLayout = require(script.Parent.FarmLayout)
 type PlayerData = Types.PlayerData
 type Migration = (any) -> any
 
-local VERSION = 6
+local VERSION = 7
 local MAX_DEPTH = 16
 local MAX_LEGACY_PETS = 1000 -- v1–v3 : au-delà, un compteur d'exemplaires est jugé corrompu (laissé tel quel)
 
@@ -142,7 +142,32 @@ local MIGRATIONS: { [number]: Migration } = {
 	[6] = function(data: any): any
 		return data
 	end,
+	-- v7 (Phase 5, production hors ligne) : `offline` (aucun bilan, totaux à zéro) est ajouté par la réconciliation ;
+	-- `settledAt = 0` : la première absence comptée part de la dernière sauvegarde (`meta.lastSeen`), plafonnée à
+	-- 2 h comme toute absence. Aucune transformation, rien n'est supprimé.
+	[7] = function(data: any): any
+		return data
+	end,
 }
+
+-- Bilan hors ligne vide (aucun calcul encore fait), déjà « vu » : aucun écran à afficher.
+local function emptyOfflineReport(): any
+	return {
+		at = 0,
+		awaySeconds = 0,
+		countedSeconds = 0,
+		harvests = 0,
+		sales = 0,
+		coins = BigNum.zero(),
+		bagAdded = 0,
+		discoveries = 0,
+		levelUps = 0,
+		missions = 0,
+		stoppedBagFull = false,
+		reason = "none",
+		seen = true,
+	}
+end
 
 local DataSchema = {
 	VERSION = VERSION,
@@ -186,6 +211,12 @@ function DataSchema.template(now: number): PlayerData
 				autoSells = 0,
 				autoSellCoins = BigNum.zero(),
 			},
+		},
+		offline = {
+			settledAt = 0,
+			report = emptyOfflineReport(),
+			totalSeconds = 0,
+			totalCoins = BigNum.zero(),
 		},
 		progression = {
 			rebirths = 0,
@@ -621,6 +652,40 @@ function DataSchema.sanitize(data: PlayerData, now: number?): { string }
 			at
 		)
 		automation.stats.autoSellCoins = BigNum.zero()
+	end
+
+	-- Production hors ligne (Phase 5, v7) : horodatage de règlement plausible, bilan bien formé, totaux valides. Un
+	-- bilan invalide est mis en quarantaine tel quel et remplacé par un bilan vide (aucun gain n'en dépend : les gains
+	-- sont déjà crédités au moment du calcul).
+	local offline = raw.offline
+	if not isTimestamp(offline.settledAt) then
+		quarantine(data, notes, "offline.settledAt", offline.settledAt, "horodatage invalide -> 0", at)
+		offline.settledAt = 0
+	end
+	if not isNonNegativeInteger(offline.totalSeconds) then
+		quarantine(data, notes, "offline.totalSeconds", offline.totalSeconds, "compteur invalide -> 0", at)
+		offline.totalSeconds = 0
+	end
+	if not BigNum.isValid(offline.totalCoins) or BigNum.isNegative(offline.totalCoins) then
+		quarantine(data, notes, "offline.totalCoins", offline.totalCoins, "montant invalide -> 0", at)
+		offline.totalCoins = BigNum.zero()
+	end
+	local report = offline.report
+	local reportValid = isTimestamp(report.at)
+		and isTimestamp(report.awaySeconds)
+		and isTimestamp(report.countedSeconds)
+		and report.countedSeconds <= GameConfig.Offline.MaxSeconds
+		and isNonNegativeInteger(report.harvests)
+		and isNonNegativeInteger(report.sales)
+		and BigNum.isValid(report.coins)
+		and not BigNum.isNegative(report.coins)
+		and isNonNegativeInteger(report.bagAdded)
+		and isNonNegativeInteger(report.discoveries)
+		and isNonNegativeInteger(report.levelUps)
+		and isNonNegativeInteger(report.missions)
+	if not reportValid then
+		quarantine(data, notes, "offline.report", report, "bilan hors ligne invalide -> vide", at)
+		offline.report = emptyOfflineReport()
 	end
 
 	-- Compteurs.
