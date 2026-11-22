@@ -22,12 +22,12 @@ src/
     Types.luau            Contrats de données (PlayerData, TileState, ClientState…)
     Net.luau              Noms et accès aux RemoteEvents
     Config/               GameConfig, PlantConfig, MutationConfig, DroneConfig, ProgressionConfig, UpgradeConfig,
-                          MutadexConfig, PetConfig, EventConfig, QuestConfig
+                          MutadexConfig, PetConfig, EventConfig, QuestConfig, ExpansionConfig
                           (gelées)
     Util/                 Logique pure : BigNum, Format, Growth, Economy, Inventory, MutationRoll,
                           DataSchema, Resets, FarmLayout, ClientView, Signal, Deep, SessionLock, SlotAllocator,
                           HarvestRules, DroneLogic, ProgressionMath, Upgrades, Mutadex, Pets, WorldEvents, Quests,
-                          Hash,
+                          Hash, Expansions,
                           Bonuses (agrégation améliorations × familiers sous les plafonds globaux)
   server/   -> ServerScriptService.Server
     init.server.luau      Bootstrap des services
@@ -77,7 +77,7 @@ dépend de ces trois derniers.)
 | **DataService** | Chargement/sauvegarde, verrou de session, autosave, migrations | `GetData`, `Update`, `IsLoaded`, `SaveNow`, signaux `ProfileLoaded`, `ProfileReleasing`, `Changed` |
 | **EconomyService** | Coins, vente du sac (× multiplicateur de revenu rebirth × prestige, calculé dans le mutateur) ; tout gain alimente l'historique et les cycles (`ProgressionMath.recordEarnings`) | `AddCoins`, `TrySpendCoins`, `SellAll` |
 | **PlantService** | Graines (déblocage, sélection), durée de pousse effective | `GetSelectedSeed`, `ComputeGrowTime`, `UnlockSeed`, `SelectSeed` |
-| **FarmService** | Parcelles (attribution, construction), état des cases, replantation | `PlantTile`, `ReplantEmpty`, `GetTilePart`, `OwnsTile`, `GetPlotModel`, `GetPlotOrigin`, signal `PlotReady` |
+| **FarmService** | Fermes (attribution, construction), état des cases, replantation ; **extensions** (Phase 5) : chaque parcelle construite ou démontée selon `farm.plots` (`SyncPlots` : chargement, achat, rebirth / prestige), panneaux « À vendre » à invite serveur, achat `Expansions.purchase` dans un mutateur ; personnages posés sur un socle de terrasse qui apparaît | `PlantTile`, `ReplantEmpty`, `SyncPlots`, `BuyPlot`, `GetTilePart`, `OwnsTile`, `GetPlotModel`, `GetPlotOrigin`, signal `PlotReady` |
 | **HarvestService** | Récoltes joueur et drone (règles communes `HarvestRules`, qui enregistrent aussi le Mutadex et l'XP des familiers dans le même mutateur), bonus de précision (joueur seulement), notification des mutations ≥ ×8 ; signal `Harvested(player, outcome, source)` après chaque récolte validée | `Harvest`, `HarvestForDrone`, `Harvested` |
 | **MutadexService** | Annonces du Mutadex (Phase 4, jalon A) : premières découvertes et paliers accordés ; accorde au chargement les paliers déjà atteints | `OnHarvest` |
 | **SyncService** | Réplication de l'état joueur (coalescée, ≤ 10 Hz) | — |
@@ -125,6 +125,8 @@ Règle 7 (probabilités de mutation côté serveur) : les **poids** et le facteu
 multiplicateurs publics (affichés au joueur), appliqués aux poids par le serveur et plafonnés par `Util/Bonuses`.
 
 La vente passe par un `ProximityPrompt` serveur (le moteur valide la distance) avec un délai anti-spam.
+L'achat d'extensions de ferme aussi (Phase 5 : panneau « À vendre » de chaque emplacement, appui de 0,5 s,
+propriétaire seulement, 2 achats/s, ordre et prix validés par `Expansions.purchase`).
 L'achat de drones aussi (station de la parcelle, appui de 0,4 s, propriétaire seulement, 2 achats/s) : aucun remote
 d'achat n'existe, le client ne peut fournir ni prix ni quantité.
 Aucune `RemoteFunction` serveur→client.

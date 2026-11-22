@@ -44,10 +44,7 @@ function EconomyService.TrySpendCoins(player: Player, amount: BigNum): boolean
 	end
 	local spent = false
 	DataService.Update(player, function(data)
-		if BigNum.gte(data.currencies.coins, amount) then
-			data.currencies.coins = BigNum.sub(data.currencies.coins, amount)
-			spent = true
-		end
+		spent = Economy.trySpend(data, amount)
 	end)
 	return spent
 end

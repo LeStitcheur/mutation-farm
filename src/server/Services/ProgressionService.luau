@@ -66,6 +66,7 @@ function ProgressionService.Run<T>(
 	end
 	-- La donnée est déjà cohérente : une erreur ici ne doit ni bloquer le joueur ni annuler la transition.
 	local ok, err = pcall(function()
+		FarmService.SyncPlots(player) -- prestige : extensions reprises démontées immédiatement
 		FarmService.ReplantEmpty(player)
 		DroneService.Refresh(player)
 		onApplied(result)

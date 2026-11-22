@@ -310,11 +310,15 @@ function DataSchema.sanitize(data: PlayerData, now: number?): { string }
 		end
 	end
 
-	-- Parcelles : uniquement des identifiants connus ; la parcelle principale est toujours débloquée.
+	-- Parcelles : uniquement des identifiants connus et des booléens (extensions achetées, Phase 5) ; la parcelle
+	-- principale est toujours débloquée.
 	for plotId, unlocked in data.farm.plots do
 		if not FarmLayout.getPlot(plotId) then
 			data.farm.plots[plotId] = nil
 			quarantine(data, notes, "farm.plots." .. tostring(plotId), unlocked, "parcelle inconnue", at)
+		elseif type(unlocked) ~= "boolean" then
+			data.farm.plots[plotId] = nil
+			quarantine(data, notes, "farm.plots." .. plotId, unlocked, "état de parcelle invalide -> verrouillée", at)
 		end
 	end
 	for plotId, unlocked in FarmLayout.defaultPlots() do

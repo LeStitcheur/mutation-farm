@@ -137,10 +137,10 @@ Mutadex, cosmétiques, familiers, **droits Robux** (`receipts` ; les Game Passes
 stockés comme vérité), statistiques historiques (`stats`, dont `coinsEarned` et `totalRebirths`), `prestiges`
 (+1), `meta` (dont la quarantaine), `rebirthTokens` (obsolète).
 
-Limite connue : les extensions de parcelle ne sont pas encore achetables (Phase 4). Si une parcelle achetée est
-reprise par un prestige, ses cases sont refusées immédiatement par le serveur (`FarmLayout.isTileUnlocked`), mais sa
-géométrie reste visible jusqu'à la reconstruction de la parcelle (prochaine connexion) : à traiter avec l'achat des
-extensions.
+Extensions de ferme (Phase 5, jalon A, `docs/FARM.md`) : achetées en Coins, **conservées au rebirth**, reprises au
+prestige. Leur géométrie est démontée **immédiatement** après le prestige (`FarmService.SyncPlots`, appelé par
+`ProgressionService.Run`) et leurs panneaux « À vendre » réapparaissent ; la limite de la Phase 3 (géométrie
+visible jusqu'à la reconnexion) est levée.
 
 ### Déroulé et garanties
 Identiques au rebirth (§2) : `PrestigeRequest(revision)` validé (entier, débit ≤ 0,5/s), `ProgressionService.Run`

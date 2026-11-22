@@ -26,8 +26,8 @@ Fantasy colorée et stylisée, sessions courtes, progression lisible, aucun acha
 
 - **Parcelle personnelle** attribuée à l'arrivée (8 emplacements par serveur, `MaxPlayers` recommandé : 6).
 - **Terrain initial 3×3** (`main`), cases de 8×8 studs.
-- **Extensions latérales** `west` / `east` (3×3 chacune) et **terrasses** supérieures `terrace` — positions déjà
-  réservées dans `FarmLayout`, déblocage **[Phase 3]**.
+- **Extensions latérales** `west` / `east` (3×3 chacune) et **terrasse** surélevée `terrace` (escalier) — achetées
+  en Coins dans l'ordre (300 K, 4 M, 40 M), conservées au rebirth, reprises au prestige **[Phase 5, `docs/FARM.md`]**.
 - **Plantation automatique** : toute case vide est replantée immédiatement avec la graine sélectionnée (gratuit).
 - **Croissance automatique** par timestamps serveur : la croissance continue hors ligne.
 - **Marché** (stand de vente) devant chaque parcelle : ProximityPrompt « Vendre tout ».

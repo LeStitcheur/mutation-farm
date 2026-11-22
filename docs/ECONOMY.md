@@ -111,7 +111,11 @@ L'ancien contrat Phase 5 (coût `5·10⁷ × 6ⁿ`, multiplicateur `1,5ⁿ`, Reb
     grâce inchangé (`Upgrades.spec`).
 14. Rythme mesuré par le simulateur (`EconomySim.spec`) : premier rebirth en 8–25 min (actif), 10–30 min (hybride),
     15–45 min (automatisé) ; premier prestige en 1 h 30 – 5 h ; cycle suivant plus court mais ≥ 3 min ; aucune
-    amélioration Essence de niveau 1 ne réduit le revenu (≥ −1 %) ; Valeur de vente ≥ +8 %.
+    amélioration Essence de niveau 1 ne réduit le revenu (≥ −1 %) ; Valeur de vente ≥ +8 %. Depuis la Phase 5, les
+    profils achètent les extensions de ferme (§12) : ces bornes sont mesurées extensions comprises.
+15. Extensions de ferme (Phase 5) : achetées dans l'ordre, prix strictement croissants, débit et déblocage
+    indissociables (`Expansions.spec`) ; une extension augmente le revenu dès que les récolteurs (joueur, drones) ne
+    sont plus saturés par les cases existantes (Maïs et au-delà, `EconomySim.spec`).
 
 ## 6. Grands nombres
 
@@ -131,7 +135,7 @@ Paramètres par type (`src/shared/Config/DroneConfig.luau`) et globaux (`GameCon
 | `maxOwned` | 3 | exemplaires par joueur |
 | `interval` | 4 s | délai entre deux actions d'un drone |
 | `capacity` | 1 | plantes récoltées par action |
-| `range` | 25 studs | portée horizontale autour de son point d'attente (couvre la parcelle principale, pas les extensions) |
+| `range` | 55 studs | portée horizontale autour de son point d'attente : toute la ferme, extensions comprises (Phase 5 ; 25 studs avant, parcelle principale seulement) |
 | `graceDelay` | 5 s | délai de grâce : un drone ne vise une plante que 5 s après sa maturité (fenêtres Parfait/Bien laissées au joueur ; invariant `graceDelay ≥ GoodWindow`) |
 | `TickInterval` | 0,25 s | cadence de l'unique boucle serveur des drones |
 | `BagFullNoticeInterval` | 30 s | « Tes drones attendent : sac plein » au plus une fois par 30 s |
@@ -355,3 +359,57 @@ Constats :
   Rosée chanceuse (chance × 1,5 à la plantation, 15 min), plafonnée avec tout le reste à 5.
 - Les Coins de mission comptent comme gagnés : ils avancent le rebirth (≈ 15 % du premier seuil pour les trois
   quotidiennes d'un joueur neuf).
+
+## 12. Extensions de ferme (Phase 5, jalon A ; détail : `docs/FARM.md`)
+
+Parcelles de `FarmLayout` achetées en Coins (`src/shared/Config/ExpansionConfig.luau`), **dans l'ordre**, conservées
+au rebirth et réinitialisées au prestige :
+
+| Extension | Parcelle | Cases | Prix | Rôle |
+|---|---|---|---|---|
+| Champ ouest | `west` | +9 (18) | 300 000 | 2ᵉ ou 3ᵉ cycle de rebirth |
+| Champ est | `east` | +9 (27) | 4 000 000 | 4ᵉ–5ᵉ cycle |
+| Terrasse | `terrace` (surélevée, escalier) | +9 (36) | 40 000 000 | objectif des cycles suivant un prestige |
+
+Mesures (`tools/bin/lune.exe run tests/run.luau report phase5`, moyennes de 8 parties) :
+
+### H1. Coins / min selon les parcelles possédées (10 min, sans amélioration)
+
+| Graine | Actif 9 cases | Actif 18 | Actif 36 | 3 drones 9 cases | 3 drones 18 | 3 drones 36 |
+|---|---|---|---|---|---|---|
+| Carotte | 585 | 512 | 512 | 304 | 304 | 304 |
+| Tomate | 2 833 | 2 173 | 2 173 | 1 277 | 1 277 | 1 277 |
+| Maïs | 6 902 | 7 678 | 7 677 | 4 564 | 4 631 | 4 631 |
+| Citrouille | 15 374 | 26 381 | 28 747 | 10 649 | 17 146 | 17 146 |
+| Champi-lune | 31 205 | 56 848 | 89 372 | 24 725 | 45 600 | 57 525 |
+| Fleur-étoile | 65 504 | 121 712 | 208 642 | 52 650 | 104 406 | 180 375 |
+| Fruit du dragon | 186 891 | 276 862 | 441 394 | 166 219 | 261 562 | 428 062 |
+
+Lecture : une extension ne rapporte que si les **récolteurs** (le joueur, ≈ 0,7 récolte/s ; 3 drones, 0,75/s) ne
+sont pas déjà saturés par les cases existantes. Avec la Carotte ou la Tomate, 9 cases suffisent à les occuper : les
+cases en plus n'ajoutent rien (le simulateur récolte la case mûre la plus ancienne et perd des bonus Parfait en
+changeant de parcelle — un vrai joueur peut ignorer les cases en trop ; artefact de stratégie, pas une perte réelle).
+À partir de la Citrouille, chaque parcelle ajoute 60 à 90 % de revenu.
+
+### H2–H3. Effet sur la progression (profils du §8, qui achètent une extension seulement quand elle est utile)
+
+- Premier rebirth : **inchangé** (15,2 / 18,6 / 28,4 min) — aucune extension n'est payable avant.
+- Premier prestige (profil avancé) : **1 h 54** avec extensions, contre 2 h 37 sans (−27 %), toujours dans la cible
+  1 h 30 – 5 h (invariant 14). Champ ouest acheté vers 58 min (3ᵉ cycle), Champ est vers 1 h 47 (5ᵉ cycle), Terrasse
+  jamais avant le premier prestige.
+- Durée des cycles avec extensions : 16,6 → 20,9 → 24,9 → 23,8 → 28,2 min (le 4ᵉ profite du Champ ouest ; la
+  croissance ×3,2 des seuils reprend ensuite).
+
+Réglage retenu après trois essais (même rapport) :
+
+| Prix (ouest / est / terrasse) | Premier prestige | Cycles 1 → 5 |
+|---|---|---|
+| 30 000 / 200 000 / 1 200 000 | 1 h 25 (sous la cible) | 17 → 14 → 14 → 20 → 20 min (aplatis) |
+| 150 000 / 1 500 000 / 12 000 000 | 1 h 38 | 17 → 19 → 18 → 22 → 23 min |
+| **300 000 / 4 000 000 / 40 000 000** | **1 h 54** | 17 → 21 → 25 → 24 → 28 min |
+
+Décisions : doubler les cases double presque le revenu des graines lentes ; l'extension étant conservée entre les
+rebirths, un prix bas aplatissait les cycles. Les prix sont d'environ 1 à 4 seuils de rebirth du moment où l'achat
+devient utile. Constat du simulateur : acheter une extension quand ses récolteurs sont saturés **retarde** la graine
+suivante (un profil automatisé perdait jusqu'à −7 %) ; les profils simulés n'achètent donc une extension que lorsque
+la production des cases possédées est inférieure à leur capacité de récolte.

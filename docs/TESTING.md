@@ -157,6 +157,21 @@ Simulations Lune également (pas de validation du vrai DataStore).
   nouveau tirage ; **boosts** (effet, expiration,
   durée plafonnée) ; **migration v4 -> v5**.
 
+### Ce qui est couvert hors Studio pour les extensions de ferme (Phase 5, jalon A)
+- `Expansions.spec` (17 tests) : configuration (chaque parcelle non initiale achetable, prix strictement croissants) ;
+  **achat** dans l'ordre (ouest → est → terrasse), débit exact et déblocage indissociables, fonds insuffisants sans
+  aucune modification, **achat rejoué ×20 = un seul débit**, parcelle inconnue ou initiale refusée ; **rebirth**
+  (extensions conservées, cultures vidées) et **prestige** (retour à `main`, rachat dans l'ordre) ; **accès aux
+  nouvelles cases** (récoltable seulement après l'achat ; drones : toutes les cases de toutes les parcelles à portée
+  pour 1 à 3 drones ; terrasse visée après le délai de grâce) ; **récoltes multijoueurs** (la récolte d'un joueur
+  ne lit ni n'écrit la donnée d'un autre ; socles des 8 emplacements disjoints) ; **géométrie** (parcelles,
+  escalier et éléments fixes sans recouvrement ; marches ≤ 1 stud, contiguës, jusqu'au sol de la terrasse ; drones
+  au-dessus de la terrasse) ; **données corrompues** (état non booléen ou parcelle inconnue en quarantaine, `main`
+  forcée ; sauvegarde puis rechargement).
+- `Drones.spec` : contrat mis à jour (Phase 5) — la portée couvre toute la ferme ; le hors-portée reste refusé.
+- `EconomySim.spec` : une extension augmente le revenu de plus de 30 % dès que les récolteurs ne sont plus saturés
+  (Citrouille, Champi-lune ; joueur actif et 3 drones) ; bornes de rythme mesurées extensions comprises.
+
 ### Ce qui n'est PAS couvert automatiquement
 Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
 → checklist ci-dessous, déroulée via Studio MCP (§3) ; ce qui exige un humain reste marqué comme tel.
@@ -405,6 +420,27 @@ chemins** (remotes `HarvestRequest`, `PetHatch`, `PetEquip`, `QuestClaim`, bouto
 | Manette (simulée) | ✅ (correctif) | L1 Rebirth, R1 Prestige, L2 Améliorations, R2 Mutadex, L3 Familiers, R3 Missions, B ferme. **Défaut corrigé** : R3 était capté par le zoom caméra de Roblox (`RbxCameraGamepadZoom`, même priorité) ; raccourcis des panneaux désormais en priorité haute (le zoom caméra par R3 n'est plus disponible) |
 | Console | ✅ | Aucune erreur ni avertissement des scripts du jeu sur les 3 sessions |
 | Non vérifiable ici | ⛔ | Persistance réelle (DataStore en mémoire), changement de serveur, renouvellement réel à 00:00 UTC, arrivée tardive à plusieurs joueurs, mobile réel, vraie manette — protocole §2.4 |
+
+### 2.9 Phase 5, jalon A (extensions) — validation Studio MCP du 2026-11-22 (Play solo, API désactivée, 2 sessions)
+
+Place construite par `rojo build` (copie locale, jamais publiée) ; achats par les **vraies invites** (personnage
+déplacé devant le panneau, touche E maintenue 0,9 s), rebirths et prestige par les **vrais remotes**
+(`RebirthRequest`, `PrestigeRequest`) ; `DevService` seulement pour créditer des Coins gagnés.
+
+| Contrôle | Résultat | Observation |
+|---|---|---|
+| Chargement | ✅ | `Area_main` + panneaux `Sale_west` (« À VENDRE · Champ ouest · 300K Coins », Acheter), `Sale_east` et `Sale_terrace` (« Verrouillé », « après : … ») ; 9 cases taguées |
+| Achat Champ ouest | ✅ | 300 000 → 0 Coins, `plots.west = true`, `Area_west` construite, 9 cases plantées, panneau retiré, Champ est passe à « Acheter · 4.00M » |
+| Achat Champ est puis Terrasse | ✅ | 36 cases taguées et plantées, 4 parcelles, Coins à 0 |
+| **Défaut corrigé** | ✅ | 1ʳᵉ session : en achetant la terrasse depuis son panneau, le personnage s'est retrouvé **enfermé dans le socle** (y = −0,08). Correctif : tout personnage dans l'emprise d'un socle ou d'une marche qui apparaît est posé dessus. 2ᵉ session : y = 15,6, debout sur une case de la terrasse |
+| Escalier | ✅ | Descente au sol (y ≈ 5) puis **montée** jusqu'à la terrasse (y ≈ 15,5, sol « Ground » d'une case) par déplacement du personnage |
+| Récolte manuelle sur la terrasse | ✅ | Touche E près d'une case mûre : 1 récolte, `carrot|normal` dans le sac |
+| Drones sur les extensions | ✅ | 3 drones achetés à la station (14 625 Coins) ; 30 s : 22 récoltes (0,73/s) sur main / ouest / est, puis la terrasse (5), puis « Sac plein » ×3 |
+| Rebirth | ✅ | Révision 1 : 4 parcelles et leur géométrie **conservées**, 36 cases replantées en Carotte, drones et sac vidés |
+| Prestige (après 5 rebirths) | ✅ | `plots = { main }`, extensions **démontées immédiatement** (9 cases taguées), panneaux « À vendre » rétablis (ouest : Acheter) |
+| Achat hors ordre | ✅ | Champ est avec 5 M Coins après le prestige : « Achète d'abord l'extension précédente. », Coins et parcelles inchangés |
+| Console | ✅ | Aucune erreur ni avertissement des scripts du jeu (seul message : `rbxassetid://203785492`, ressource Roblox hors dépôt) |
+| Non vérifiable ici | ⛔ | Deux joueurs réels (fermes voisines, invite d'achat d'un autre joueur refusée), persistance réelle des extensions — protocole §2.4 |
 
 ## 3. Studio MCP (opération manuelle, recommandée)
 

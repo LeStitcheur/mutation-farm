@@ -73,6 +73,25 @@ return function()
 		end)
 	end)
 
+	describe("extensions de ferme (Phase 5)", function()
+		-- Doubler les cases n'aide que si les récolteurs ne sont pas déjà saturés : à partir de la Citrouille (35 s),
+		-- 9 cases ne suffisent plus à occuper un joueur actif ni 3 drones (docs/ECONOMY.md §12, H1).
+		it("une extension augmente nettement le revenu dès que les récolteurs ne sont plus saturés", function()
+			local dronesOnly = { name = "drones", manual = false, sellTrip = 8, sellEvery = 120, targetDrones = 3 }
+			for _, case in { { profiles.active, 0 }, { dronesOnly, 3 } } do
+				local profile, drones = case[1], case[2]
+				for _, plantId in { "pumpkin", "moonshroom" } do
+					local base, extended = 0, 0
+					for _, seed in { 1, 2 } do
+						base += EconomySim.steadyIncome(profile, plantId, drones, 600, seed)
+						extended += EconomySim.steadyIncome(profile, plantId, drones, 600, seed, { "west" })
+					end
+					expect(extended > base * 1.3).to.equal(true)
+				end
+			end
+		end)
+	end)
+
 	describe("prestige", function()
 		it("premier prestige en 1 h 30 – 5 h ; le cycle suivant est plus rapide, sans être instantané", function()
 			local sim = EconomySim.new(profiles.advanced, 1)

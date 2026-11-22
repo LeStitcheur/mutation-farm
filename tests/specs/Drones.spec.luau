@@ -84,16 +84,21 @@ return function()
 			expect(b.x - a.x).to.equal(f.droneSpacing)
 		end)
 
-		it("chaque drone couvre toute la parcelle principale, pas les extensions lointaines", function()
+		-- Contrat Phase 5 (extensions achetables) : la portée couvre toute la ferme (Phase 2 : parcelle principale
+		-- seulement). Le hors-portée reste refusé : point d'attente éloigné ci-dessous, portée réduite plus bas.
+		it("chaque drone couvre toute la ferme, extensions comprises, et rien au-delà de sa portée", function()
 			for total = 1, harvester.maxOwned do
 				for index = 1, total do
 					local home = DroneLogic.homePosition(index, total)
-					for _, tileId in FarmLayout.tileIds("main") do
-						expect(DroneLogic.inRange(home, tileId, harvester.range)).to.equal(true)
+					for _, plot in FarmLayout.Plots do
+						for _, tileId in FarmLayout.tileIds(plot.id) do
+							expect(DroneLogic.inRange(home, tileId, harvester.range)).to.equal(true)
+						end
 					end
-					expect(DroneLogic.inRange(home, "east:6", harvester.range)).to.equal(false)
 				end
 			end
+			local far = { x = harvester.range + 100, y = 12, z = 0 }
+			expect(DroneLogic.inRange(far, "east:6", harvester.range)).to.equal(false)
 			expect(DroneLogic.inRange(DroneLogic.homePosition(1, 1), "inconnue", 1000)).to.equal(false)
 		end)
 

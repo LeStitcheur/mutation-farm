@@ -159,12 +159,29 @@ non fusionnée).
 - [x] Validation Studio MCP (`docs/TESTING.md` §2.8) — 2026-11-21, raccourci R3 corrigé (priorité haute)
 - [ ] Manuel : renouvellement réel à 00:00 UTC, mobile, manette (`docs/TESTING.md` §2.4)
 
-## Phase 5 — Croissance de la ferme et automatisation (ex-Phase 4, replanifiée)
-- [ ] Améliorations normales (vitesse, valeur, sac) — UpgradeService + UI
-- [ ] Extensions latérales `west`/`east`, terrasses (escaliers, déblocage) ; reconstruction de la parcelle au prestige
-- [ ] AutomationService : drones collecteurs (simulation agrégée), vente auto (drones récolteurs : Phase 2 jalon B)
-- [ ] Production hors ligne plafonnée à 2 h, écran « Pendant ton absence »
-- Rebirth & Prestige : avancés en Phase 3. Floraison dorée : Phase 4, jalon C.
+## Phase 5 — Extensions, améliorations normales, automatisation, hors ligne (branche `phase-5/farm-expansion`)
+
+Cahier des charges du 2026-11-22. Branche empilée sur `phase-4/content-retention` (PR #2, non fusionnée).
+
+**Jalon A — Extensions de ferme (implémenté, validé en Studio le 2026-11-22)**
+- [x] Achat des parcelles `west`, `east`, `terrace` en Coins, dans l'ordre (300 K, 4 M, 40 M ; `ExpansionConfig`,
+      règle pure `Expansions`), panneaux « À vendre » à invite serveur, aucun remote
+- [x] Construction / démontage par parcelle (`FarmService.SyncPlots`) : chargement, achat, rebirth (conservées),
+      prestige (démontées immédiatement) ; escalier de terrasse (marches de 1 stud) ; personnages posés sur un socle
+      qui apparaît (défaut trouvé en Studio)
+- [x] Drones : portée 55 studs (toute la ferme), point d'attente au-dessus de la terrasse ; délai de grâce inchangé
+- [x] Aucune superposition (parcelles, escalier, éléments fixes, 8 emplacements) ; quarantaine des états de parcelle
+      invalides
+- [x] Tests Lune : 315 (dont `Expansions.spec` 17) ; simulateur : profils qui achètent les extensions utiles,
+      rapport `report phase5` (premier prestige 2 h 37 → 1 h 54, `docs/ECONOMY.md` §12)
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.9)
+- [ ] Manuel : deux joueurs réels, persistance réelle (`docs/TESTING.md` §2.4)
+
+**Jalon B — Améliorations normales** — à venir
+**Jalon C — Automatisation (vente automatique)** — à venir
+**Jalon D — Production hors ligne** — à venir
+
+Rebirth & Prestige : avancés en Phase 3. Floraison dorée : Phase 4, jalon C.
 
 ## Phase 6 — Monétisation
 - [ ] PurchaseService : Game Passes (confort/cosmétique), Developer Products limités

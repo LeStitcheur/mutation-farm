@@ -89,7 +89,8 @@ Entrée : `{ path, value, reason, at }` (`Types.QuarantineEntry`).
 - `value` : valeur d'origine si elle est sérialisable en JSON, sinon sa représentation texte (`tostring`).
 - Liste FIFO bornée à `GameConfig.Data.MaxQuarantine` (100) : au-delà, les plus anciennes entrées sortent.
 - Couvre : montants `BigNum` invalides ou négatifs (monnaies, `coinsEarned`, `cycleCoins`, `prestigeCoins`),
-  parcelles et cases inconnues ou invalides, objets du sac, graines inconnues, sélection non débloquée, drones
+  parcelles et cases inconnues ou invalides (Phase 5 : état de parcelle non booléen → parcelle verrouillée ; le
+  champ `farm.plots` existait déjà, aucune nouvelle version), objets du sac, graines inconnues, sélection non débloquée, drones
   inconnus ou au-delà du maximum, compteurs invalides (`rebirths`, `prestiges`, `revision`, `totalRebirths`,
   `rebirthTokens`), reçus non textuels, liste de quarantaine elle-même invalide, **niveaux d'améliorations**
   (Phase 3, jalon C : identifiant inconnu ou rangé dans le mauvais arbre, niveau non entier, négatif ou nul →
