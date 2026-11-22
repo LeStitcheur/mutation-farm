@@ -70,6 +70,9 @@ local function loadStep(player: Player, data: PlayerData): PlayerData?
 	end
 	local report = Offline.settle(copy, Workspace:GetServerTimeNow(), {
 		roll = roll,
+		-- Au chargement, la donnée n'est pas encore vivante : aucune transition ne peut s'intercaler, et une absence ne
+		-- peut pas chevaucher un reset (rebirth et prestige exigent le joueur connecté, session verrouillée). La
+		-- garantie « aucune récompense d'un ancien cycle » est donc structurelle ; ce contrôle reste défensif.
 		expectedRevision = copy.progression.revision,
 		yield = function()
 			task.wait()

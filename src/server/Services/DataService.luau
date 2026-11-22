@@ -11,6 +11,7 @@
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage.Shared
 local GameConfig = require(Shared.Config.GameConfig)
@@ -120,7 +121,9 @@ local function writeProfile(profile: Profile, release: boolean): boolean
 	accumulatePlayTime(profile)
 	local now = os.time()
 	local snapshot = Deep.copy(profile.data)
-	snapshot.meta.lastSeen = now
+	-- Horloge serveur synchronisée (comme plantedAt) : la production hors ligne compare ces deux horodatages
+	-- (Phase 5, revue : os.time() entier pouvait décaler la fenêtre d'une seconde). Le verrou garde os.time().
+	snapshot.meta.lastSeen = Workspace:GetServerTimeNow()
 	local valid, reason = DataSchema.validate(snapshot)
 	if not valid then
 		warn(

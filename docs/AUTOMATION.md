@@ -97,9 +97,13 @@ Règle pure `src/shared/Util/Offline.luau`, service `OfflineService`, écran `Of
 5. **Idempotence** : `offline.settledAt` = maintenant. Une reconnexion ne recompte jamais une période déjà réglée ;
    si le serveur s'arrête avant d'avoir écrit le règlement, la donnée stockée n'a pas changé et la même absence est
    recalculée une seule fois au chargement suivant (jamais additionnée).
-6. **Cycle** : le calcul vérifie la révision de progression lue au chargement ; une révision différente (reset
-   intervenu entre-temps) ne rapporte rien. Une absence ne peut pas chevaucher un reset : rebirth et prestige
-   exigent le joueur connecté et la session est verrouillée (un seul serveur).
+6. **Cycle** : une absence ne peut pas chevaucher un reset (rebirth et prestige exigent le joueur connecté, la session
+   est verrouillée sur un seul serveur, et le calcul se fait avant que le profil ne devienne vivant) : la production
+   comptée appartient toujours au cycle sauvegardé à la déconnexion. Garantie **structurelle** ; la règle pure
+   accepte en plus une révision attendue (une révision différente ne rapporte rien, testé), contrôle seulement
+   défensif au chargement (revue de code).
+   Absence de moins de 60 s : rien n'est compté et la période est marquée réglée (choix assumé contre les
+   changements rapides de serveur : seul le joueur y perd cette micro-absence).
 7. **Bilan** : `offline.report` (absence, durée comptée, récoltes, ventes, Coins, objets ajoutés au sac, découvertes,
    niveaux de familiers, missions, sac plein, raison), totaux `offline.totalSeconds` / `totalCoins`. L'écran
    « Pendant ton absence » l'affiche une fois (OK / B le marque lu, remote `OfflineReportSeen` sans charge utile) ;
