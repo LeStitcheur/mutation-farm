@@ -128,8 +128,11 @@ function ProgressionMath.rebirthPreview(data: PlayerData): RebirthPreview
 		eligible = eligible,
 		essence = ProgressionMath.rebirthEssence(n, progression.cycleCoins, Upgrades.essenceMultiplier(data)),
 		multiplier = ProgressionMath.incomeMultiplier(data),
-		-- Les améliorations (Essence et permanentes) et les familiers sont conservés au rebirth.
-		nextMultiplier = ProgressionMath.rebirthMultiplier(n + 1) * prestigeFactor * Bonuses.valueMultiplier(data),
+		-- Les améliorations Essence et permanentes et les familiers sont conservés au rebirth ; les améliorations
+		-- normales (Coins) sont perdues.
+		nextMultiplier = ProgressionMath.rebirthMultiplier(n + 1)
+			* prestigeFactor
+			* Bonuses.valueMultiplierExcept(data, "coins"),
 	}
 end
 

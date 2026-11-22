@@ -41,7 +41,9 @@ local GameConfig = {
 	},
 
 	Offline = {
-		MaxSeconds = 7200, -- production automatisée hors ligne plafonnée à 2 h (Phase 4)
+		MaxSeconds = 7200, -- production automatisée hors ligne plafonnée à 2 h (Phase 5, jalon D)
+		MinSeconds = 60, -- absence plus courte : rien n'est compté (changements rapides de serveur)
+		SeenRequestsPerSecond = 1, -- « écran Pendant ton absence lu » (remote OfflineReportSeen)
 	},
 
 	Sync = {

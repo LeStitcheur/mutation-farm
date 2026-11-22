@@ -21,6 +21,8 @@ local Events = {
 	PetUnequip = "PetUnequip", -- identifiant d'instance
 	PetRelease = "PetRelease", -- identifiant d'instance (familier non équipé)
 	QuestClaim = "QuestClaim", -- identifiant de mission (récupération unique)
+	AutomationRequest = "AutomationRequest", -- action (achat du comptoir, réglage) + valeur ; jamais de montant
+	OfflineReportSeen = "OfflineReportSeen", -- écran « Pendant ton absence » fermé (aucune charge utile)
 	-- Serveur -> Client
 	StateSync = "StateSync",
 	HarvestResult = "HarvestResult",

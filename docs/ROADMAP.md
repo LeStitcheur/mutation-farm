@@ -159,12 +159,59 @@ non fusionnée).
 - [x] Validation Studio MCP (`docs/TESTING.md` §2.8) — 2026-11-21, raccourci R3 corrigé (priorité haute)
 - [ ] Manuel : renouvellement réel à 00:00 UTC, mobile, manette (`docs/TESTING.md` §2.4)
 
-## Phase 5 — Croissance de la ferme et automatisation (ex-Phase 4, replanifiée)
-- [ ] Améliorations normales (vitesse, valeur, sac) — UpgradeService + UI
-- [ ] Extensions latérales `west`/`east`, terrasses (escaliers, déblocage) ; reconstruction de la parcelle au prestige
-- [ ] AutomationService : drones collecteurs (simulation agrégée), vente auto (drones récolteurs : Phase 2 jalon B)
-- [ ] Production hors ligne plafonnée à 2 h, écran « Pendant ton absence »
-- Rebirth & Prestige : avancés en Phase 3. Floraison dorée : Phase 4, jalon C.
+## Phase 5 — Extensions, améliorations normales, automatisation, hors ligne (branche `phase-5/farm-expansion`)
+
+Cahier des charges du 2026-11-22. Branche empilée sur `phase-4/content-retention` (PR #2, non fusionnée).
+
+**Jalon A — Extensions de ferme (implémenté, validé en Studio le 2026-11-22)**
+- [x] Achat des parcelles `west`, `east`, `terrace` en Coins, dans l'ordre (300 K, 4 M, 40 M ; `ExpansionConfig`,
+      règle pure `Expansions`), panneaux « À vendre » à invite serveur, aucun remote
+- [x] Construction / démontage par parcelle (`FarmService.SyncPlots`) : chargement, achat, rebirth (conservées),
+      prestige (démontées immédiatement) ; escalier de terrasse (marches de 1 stud) ; personnages posés sur un socle
+      qui apparaît (défaut trouvé en Studio)
+- [x] Drones : portée 55 studs (toute la ferme), point d'attente au-dessus de la terrasse ; délai de grâce inchangé
+- [x] Aucune superposition (parcelles, escalier, éléments fixes, 8 emplacements) ; quarantaine des états de parcelle
+      invalides
+- [x] Tests Lune : 315 (dont `Expansions.spec` 17) ; simulateur : profils qui achètent les extensions utiles,
+      rapport `report phase5` (premier prestige 2 h 37 → 1 h 54, `docs/ECONOMY.md` §12)
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.9)
+- [ ] Manuel : deux joueurs réels, persistance réelle (`docs/TESTING.md` §2.4)
+
+**Jalon B — Améliorations normales (implémenté, validé en Studio le 2026-11-22)**
+- [x] Arbre « Coins » (`upgrades.normal`, existant : aucune migration) : Arrosage rapide (vitesse de croissance),
+      Récoltes de qualité (valeur), Grand sac (capacité) ; même règle d'achat, mêmes effets et plafonds globaux
+- [x] Remises à zéro au rebirth et au prestige (`Resets`) ; aperçu du rebirth sans ces améliorations
+- [x] Onglet « Coins » du panneau Améliorations (`ModalPanel`, `PanelHub`), sélectionné par défaut
+- [x] Tests Lune : 329 (dont `NormalUpgrades.spec` 13, `EconomySim.spec` +1) ; mesures `docs/ECONOMY.md` §13
+      (premier prestige 1 h 54 → 1 h 44)
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.10)
+- [ ] Manuel : toucher, manette, persistance réelle (`docs/TESTING.md` §2.4)
+**Jalon C — Automatisation avancée (implémenté, validé en Studio le 2026-11-22)**
+- [x] Pas de drone collecteur (aucun objet au sol : distinction non justifiée) ; le transport au marché devient le
+      **comptoir automatique** (5 000 Coins, machine du cycle), seuil 50 / 75 / 100 %
+- [x] Vente automatique par la même règle que le marché (`Selling.sellBag`) dans son propre mutateur : jamais
+      d'attribution double ; aucune boucle supplémentaire
+- [x] Sacs pleins : vente puis reprise de la récolte ; sinon attente sans perte et conseil adapté
+- [x] Réglages (drones actifs, vente automatique, seuil) et statistiques ; panneau Automatisation (K, croix droite)
+- [x] Schéma v6 + migration v5 -> v6 sans perte ; tests Lune : 348 (dont `Automation.spec` 18) ; mesures
+      `docs/ECONOMY.md` §14
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.11)
+- [ ] Manuel : toucher, manette, persistance réelle (`docs/TESTING.md` §2.4)
+**Jalon D — Production hors ligne (implémenté, validé en Studio le 2026-11-22 par absences simulées)**
+- [x] Calcul serveur au chargement (`DataService.AddLoadStep`, avant que le profil ne devienne vivant), sur une copie,
+      plafonné à 2 h, rien sous 60 s ; horodatages serveur uniquement ; idempotent (`offline.settledAt`) ; révision
+      de progression vérifiée
+- [x] Aucune simulation image par image : actions des drones rejouées d'une échéance à la suivante avec les règles
+      en ligne (`HarvestRules`, comptoir, sac, bonus équipés, délai de grâce de 5 s), pauses toutes les 500 actions
+- [x] Écran « Pendant ton absence » (durée d'absence, durée comptée, récoltes, ventes, Coins, sac, conseils) ;
+      totaux dans le panneau Automatisation
+- [x] Schéma v7 + migration v6 -> v7 sans perte ; tests Lune : 370 (dont `Offline.spec` 22) ; mesures
+      `docs/ECONOMY.md` §15 (même production qu'en ligne à ±0,5 %) ; hypothèses et écarts `docs/AUTOMATION.md` §8
+- [x] Validation Studio MCP (`docs/TESTING.md` §2.12) — absences **simulées** (horodatages reculés)
+- [ ] Manuel : vraie déconnexion / reconnexion avec le DataStore (place publiée avec accord), changement de serveur
+      (`docs/TESTING.md` §2.4)
+
+Rebirth & Prestige : avancés en Phase 3. Floraison dorée : Phase 4, jalon C.
 
 ## Phase 6 — Monétisation
 - [ ] PurchaseService : Game Passes (confort/cosmétique), Developer Products limités

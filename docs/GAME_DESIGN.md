@@ -26,8 +26,8 @@ Fantasy colorée et stylisée, sessions courtes, progression lisible, aucun acha
 
 - **Parcelle personnelle** attribuée à l'arrivée (8 emplacements par serveur, `MaxPlayers` recommandé : 6).
 - **Terrain initial 3×3** (`main`), cases de 8×8 studs.
-- **Extensions latérales** `west` / `east` (3×3 chacune) et **terrasses** supérieures `terrace` — positions déjà
-  réservées dans `FarmLayout`, déblocage **[Phase 3]**.
+- **Extensions latérales** `west` / `east` (3×3 chacune) et **terrasse** surélevée `terrace` (escalier) — achetées
+  en Coins dans l'ordre (300 K, 4 M, 40 M), conservées au rebirth, reprises au prestige **[Phase 5, `docs/FARM.md`]**.
 - **Plantation automatique** : toute case vide est replantée immédiatement avec la graine sélectionnée (gratuit).
 - **Croissance automatique** par timestamps serveur : la croissance continue hors ligne.
 - **Marché** (stand de vente) devant chaque parcelle : ProximityPrompt « Vendre tout ».
@@ -106,13 +106,16 @@ Coûts exponentiels : voir `docs/ECONOMY.md`.
 - **Floraison dorée** : croissance ×2 pendant 3 min, pétales dorés.
 - Planification serveur toutes les ~30 min, annonce 30 s avant.
 
-## 10. Automatisation [Phase 4]
+## 10. Automatisation [Phase 2 et Phase 5, `docs/AUTOMATION.md`]
 
-- **Drone récolteur** : récolte les cases mûres d'une zone (sans bonus de précision).
-- **Drone collecteur** : vide le sac vers un silo.
-- **Vente automatique** : silo vendu périodiquement.
-- Simulation **agrégée** (débit = récoltes/s calculées) plutôt que simulation par drone ; production hors ligne
-  plafonnée à **2 heures**.
+- **Drone récolteur** (Phase 2) : récolte les cases mûres de toute la ferme (sans bonus de précision, délai de grâce
+  de 5 s).
+- **Comptoir automatique** (Phase 5) : vend le sac dès un seuil choisi (50 / 75 / 100 %), au prix du marché. Le
+  « drone collecteur » prévu à l'origine est abandonné : les récoltes vont directement dans le sac, il n'y a rien à
+  collecter.
+- Réglages : drones actifs ou en pause, vente automatique, seuil ; statistiques de production automatique.
+- Production **hors ligne** plafonnée à **2 heures** (Phase 5, jalon D) : les drones actifs et le comptoir rejoués au
+  chargement ; écran « Pendant ton absence » (`docs/AUTOMATION.md` §8).
 
 ## 11. Familiers [V1.1]
 

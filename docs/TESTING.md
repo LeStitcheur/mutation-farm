@@ -157,6 +157,58 @@ Simulations Lune également (pas de validation du vrai DataStore).
   nouveau tirage ; **boosts** (effet, expiration,
   durée plafonnée) ; **migration v4 -> v5**.
 
+### Ce qui est couvert hors Studio pour les extensions de ferme (Phase 5, jalon A)
+- `Expansions.spec` (17 tests) : configuration (chaque parcelle non initiale achetable, prix strictement croissants) ;
+  **achat** dans l'ordre (ouest → est → terrasse), débit exact et déblocage indissociables, fonds insuffisants sans
+  aucune modification, **achat rejoué ×20 = un seul débit**, parcelle inconnue ou initiale refusée ; **rebirth**
+  (extensions conservées, cultures vidées) et **prestige** (retour à `main`, rachat dans l'ordre) ; **accès aux
+  nouvelles cases** (récoltable seulement après l'achat ; drones : toutes les cases de toutes les parcelles à portée
+  pour 1 à 3 drones ; terrasse visée après le délai de grâce) ; **récoltes multijoueurs** (la récolte d'un joueur
+  ne lit ni n'écrit la donnée d'un autre ; socles des 8 emplacements disjoints) ; **géométrie** (parcelles,
+  escalier et éléments fixes sans recouvrement ; marches ≤ 1 stud, contiguës, jusqu'au sol de la terrasse ; drones
+  au-dessus de la terrasse) ; **données corrompues** (état non booléen ou parcelle inconnue en quarantaine, `main`
+  forcée ; sauvegarde puis rechargement).
+- `Drones.spec` : contrat mis à jour (Phase 5) — la portée couvre toute la ferme ; le hors-portée reste refusé.
+- `EconomySim.spec` : une extension augmente le revenu de plus de 30 % dès que les récolteurs ne sont plus saturés
+  (Citrouille, Champi-lune ; joueur actif et 3 drones) ; bornes de rythme mesurées extensions comprises.
+
+### Ce qui est couvert hors Studio pour les améliorations normales (Phase 5, jalon B)
+- `NormalUpgrades.spec` (13 tests) : catalogue (vitesse de croissance, valeur, sac ; arbre `coins`, stockage
+  `normal`, coûts entiers strictement croissants) ; **achat en Coins** (débit exact et niveau + 1 indissociables,
+  autres monnaies intactes ; fonds insuffisants, niveau périmé ×20 et maximum refusés sans modification ; jamais de
+  solde négatif ; dépenser ne retarde pas le rebirth) ; **effets** (valeur cumulée avec les autres arbres et
+  appliquée à la vente, pousse −3 %/niv., sac +10/niv.) et **plafond** de pousse tous arbres au maximum ; **rebirth
+  et prestige** (remises à zéro, arbres Essence / Primal Cores conservés, aperçu du rebirth sans ces améliorations =
+  revenu réel après le rebirth) ; **données corrompues** (identifiant inconnu ou d'un autre arbre, niveau non entier
+  en quarantaine ; au-delà du maximum plafonné ; table non tabulaire recréée).
+- `EconomySim.spec` : aucune amélioration normale ne réduit le revenu au niveau 1 ; Récoltes de qualité ≥ +5 %.
+
+### Ce qui est couvert hors Studio pour l'automatisation (Phase 5, jalon C)
+- `Automation.spec` (18 tests) : **comptoir** (débit exact, installé et activé ; achat rejoué ×10 ou sans fonds sans
+  modification ; perdu au rebirth et au prestige, réglages et statistiques conservés) ; **vente automatique** (seuils
+  50 / 75 / 100 % sur 40 et 50 places ; même valeur que le marché, Coins gagnés, statistiques ; pas de progression
+  des missions « vendre » ; comptoir coupé ou absent : rien) ; **concurrence vente manuelle / automatique** dans les
+  deux ordres (une seule vente, crédit unique) et récolte qui atteint le seuil ; **sac plein** (sans comptoir :
+  attente sans perte ; avec : vente puis reprise ; seuil abaissé : vente immédiate) ; **réglages** (validation
+  stricte, drones en pause = débit nul) ; **statistiques** (récoltes de drones seules) ; **transition de
+  progression** pendant une vente préparée ou une cible de drone ; **migration v5 -> v6 sans perte** (chaque champ
+  v5 comparé) ; **données corrompues** (6 chemins en quarantaine) ; sauvegarde puis rechargement.
+- `EconomySim.spec` : drones seuls, le comptoir rapporte au moins autant que des ventes toutes les 2 min.
+
+### Ce qui est couvert hors Studio pour la production hors ligne (Phase 5, jalon D)
+- `Offline.spec` (22 tests) : **fenêtre** (plafond de 2 h ; départ au plus récent de la dernière sauvegarde et du
+  dernier règlement ; horodatage futur ou invalide : aucune absence) ; **production réellement automatisable**
+  (absence < 60 s : rien ; sans drone ou drones en pause : rien, écran de conseil au-delà de 10 min ; un drone avec
+  comptoir : 1 récolte / 4 s, tout vendu au prix du marché, Coins gagnés ; sans comptoir : arrêt sac plein sans perte ;
+  capacité du sac et bonus équipés ; **délai de grâce** respecté ; cultures replantées dans la fenêtre avec la graine
+  sélectionnée) ; **absence de 10 h = production de 2 h** ; **idempotence** (second règlement au même instant) ;
+  **reconnexions répétées** (30 sessions courtes : aucun gain, puis une heure comptée une fois) ; **déconnexion /
+  reconnexion via la sauvegarde** (chaque période comptée une seule fois, y compris après un arrêt sans écriture) ;
+  **révision périmée** : aucune récompense de l'ancien cycle ; **cohérence** avec la boucle des drones simulée au pas
+  de 0,25 s (±2 %) ; **écran** (durée, plafond, gains, conseils) ; **pauses coopératives** sans effet sur le
+  résultat ; **migration v6 -> v7 sans perte** ; **données corrompues** (4 chemins en quarantaine) ; sauvegarde puis
+  rechargement ; **coût du pire cas** mesuré (≈ 9 000 récoltes, ≈ 360 ms en Lune).
+
 ### Ce qui n'est PAS couvert automatiquement
 Entrées/sorties DataStore réelles, remotes, contrôleurs client et rendu : ils nécessitent Roblox Studio.
 → checklist ci-dessous, déroulée via Studio MCP (§3) ; ce qui exige un humain reste marqué comme tel.
@@ -297,6 +349,11 @@ fenêtres de test sont visibles par le MCP). Ne cocher qu'après exécution rée
 | **Familiers : persistance réelle** (Phase 4) | Comme « Sauvegarde réelle » | Éclosion puis arrêt brutal du serveur : le familier est présent au retour (sauvegarde avant confirmation) ; équipement, niveaux et œufs gratuits restaurés après changement de serveur |
 | **Familiers : performance mobile** (Phase 4) | Appareil d'entrée de gamme, 3 familiers équipés, plusieurs joueurs | Images par seconde stables, familiers qui suivent sans saccade, aucune erreur ; panneau Familiers lisible (*Test › Device*) ; manette : L3 ouvre, B ferme |
 | **Mutadex : mobile et manette** (Phase 4) | *Test › Device* ; manette branchée | Menu en grille lisible sans chevauchement avec le chat ; panneau ajusté, cartes défilables au doigt ; R2 ouvre, croix pour parcourir filtres et cartes (défilement automatique), B ferme |
+| **Extensions : 2 joueurs** (Phase 5) | *Test › Clients and Servers*, 2 joueurs | Joueur B devant un panneau « À vendre » de A : « Cette parcelle appartient à une autre ferme. », Coins de B et parcelles de A inchangés ; chacun récolte seulement ses extensions ; fermes voisines sans chevauchement visible |
+| **Extensions et améliorations : persistance réelle** (Phase 5) | Comme « Sauvegarde réelle » | Extensions, niveaux des améliorations normales, comptoir et réglages d'automatisation restaurés après Stop / Play ; extensions conservées après un rebirth réel, reprises après un prestige réel |
+| **Hors ligne : reconnexion réelle** (Phase 5) | Place publiée **avec accord**, accès API ; 3 drones et comptoir ; quitter le jeu 10 min puis revenir (puis 3 h) | Écran « Pendant ton absence » : 10 min comptées (puis « 2 h (plafond de 2 h) ») ; Coins cohérents avec ≈ 45 récoltes/min ; revenir 20 s plus tard : aucun écran, aucun gain ; changer de serveur juste après : aucun second gain |
+| **Hors ligne : sans comptoir et sans drone** (Phase 5) | Comme ci-dessus | Sans comptoir : drones arrêtés sac plein, objets au retour, aucun Coin ; sans drone (absence > 10 min) : écran de conseil, aucun gain |
+| **Automatisation et extensions : mobile et manette** (Phase 5) | *Test › Device* ; manette | Panneau Automatisation lisible (menu à 8 boutons sans chevauchement), boutons utilisables au toucher ; croix droite ouvre, B ferme ; invites « À vendre » au toucher (appui 0,5 s) et à la manette (X) ; escalier de la terrasse praticable au joystick ; écran « Pendant ton absence » : A / B ferment |
 
 ### 2.5 Phase 3, jalon A (rebirth) — validation Studio MCP du 2026-11-21 (Play solo, API désactivée)
 
@@ -405,6 +462,87 @@ chemins** (remotes `HarvestRequest`, `PetHatch`, `PetEquip`, `QuestClaim`, bouto
 | Manette (simulée) | ✅ (correctif) | L1 Rebirth, R1 Prestige, L2 Améliorations, R2 Mutadex, L3 Familiers, R3 Missions, B ferme. **Défaut corrigé** : R3 était capté par le zoom caméra de Roblox (`RbxCameraGamepadZoom`, même priorité) ; raccourcis des panneaux désormais en priorité haute (le zoom caméra par R3 n'est plus disponible) |
 | Console | ✅ | Aucune erreur ni avertissement des scripts du jeu sur les 3 sessions |
 | Non vérifiable ici | ⛔ | Persistance réelle (DataStore en mémoire), changement de serveur, renouvellement réel à 00:00 UTC, arrivée tardive à plusieurs joueurs, mobile réel, vraie manette — protocole §2.4 |
+
+### 2.9 Phase 5, jalon A (extensions) — validation Studio MCP du 2026-11-22 (Play solo, API désactivée, 2 sessions)
+
+Place construite par `rojo build` (copie locale, jamais publiée) ; achats par les **vraies invites** (personnage
+déplacé devant le panneau, touche E maintenue 0,9 s), rebirths et prestige par les **vrais remotes**
+(`RebirthRequest`, `PrestigeRequest`) ; `DevService` seulement pour créditer des Coins gagnés.
+
+| Contrôle | Résultat | Observation |
+|---|---|---|
+| Chargement | ✅ | `Area_main` + panneaux `Sale_west` (« À VENDRE · Champ ouest · 300K Coins », Acheter), `Sale_east` et `Sale_terrace` (« Verrouillé », « après : … ») ; 9 cases taguées |
+| Achat Champ ouest | ✅ | 300 000 → 0 Coins, `plots.west = true`, `Area_west` construite, 9 cases plantées, panneau retiré, Champ est passe à « Acheter · 4.00M » |
+| Achat Champ est puis Terrasse | ✅ | 36 cases taguées et plantées, 4 parcelles, Coins à 0 |
+| **Défaut corrigé** | ✅ | 1ʳᵉ session : en achetant la terrasse depuis son panneau, le personnage s'est retrouvé **enfermé dans le socle** (y = −0,08). Correctif : tout personnage dans l'emprise d'un socle ou d'une marche qui apparaît est posé dessus. 2ᵉ session : y = 15,6, debout sur une case de la terrasse |
+| Escalier | ✅ | Descente au sol (y ≈ 5) puis **montée** jusqu'à la terrasse (y ≈ 15,5, sol « Ground » d'une case) par déplacement du personnage |
+| Récolte manuelle sur la terrasse | ✅ | Touche E près d'une case mûre : 1 récolte, `carrot|normal` dans le sac |
+| Drones sur les extensions | ✅ | 3 drones achetés à la station (14 625 Coins) ; 30 s : 22 récoltes (0,73/s) sur main / ouest / est, puis la terrasse (5), puis « Sac plein » ×3 |
+| Rebirth | ✅ | Révision 1 : 4 parcelles et leur géométrie **conservées**, 36 cases replantées en Carotte, drones et sac vidés |
+| Prestige (après 5 rebirths) | ✅ | `plots = { main }`, extensions **démontées immédiatement** (9 cases taguées), panneaux « À vendre » rétablis (ouest : Acheter) |
+| Achat hors ordre | ✅ | Champ est avec 5 M Coins après le prestige : « Achète d'abord l'extension précédente. », Coins et parcelles inchangés |
+| Console | ✅ | Aucune erreur ni avertissement des scripts du jeu (seul message : `rbxassetid://203785492`, ressource Roblox hors dépôt) |
+| Non vérifiable ici | ⛔ | Deux joueurs réels (fermes voisines, invite d'achat d'un autre joueur refusée), persistance réelle des extensions — protocole §2.4 |
+
+### 2.10 Phase 5, jalon B (améliorations normales) — validation Studio MCP du 2026-11-22 (Play solo, API désactivée)
+
+Achats par les **vrais boutons** du panneau (clics souris) ou le remote `UpgradePurchase` envoyé par le client,
+touche U, vente par l'invite du marché (E), rebirth par `RebirthRequest` ; `DevService` pour créditer des Coins.
+
+| Contrôle | Résultat | Observation |
+|---|---|---|
+| Panneau | ✅ | Touche U : 3 onglets de même largeur (Coins sélectionné, vert ; Mutation Essence ; Primal Cores), « Solde : 20.0K Coins · Perdues au rebirth et au prestige », 3 lignes (4.00K, 2.50K, 1.50K Coins) |
+| Achats | ✅ | Récoltes de qualité puis Grand sac : 20.0K → 16.0K Coins, niveaux 1/10 et 1/5, coûts suivants 4.75K et 3.30K, HUD « Sac 0/50 » |
+| Rejeu et triche | ✅ | 10 × `UpgradePurchase("coins_value", 0)` + niveau −1, 0,5, chaîne de 500 caractères, table : niveau 1 inchangé, 16 000 Coins, aucune quarantaine |
+| Effet valeur | ✅ | 7 carottes récoltées (valeur brute 80), vente au marché : **+84** = ⌊80 × 1,05⌋ |
+| Effet croissance | ✅ | Arrosage rapide 1 : cases replantées ensuite `GrowTime = 5,820` (6 × 0,97), les autres restent à 6 |
+| Rebirth | ✅ | `upgrades.normal` vide, « Sac 0/40 », niveaux 0 dans le panneau ; Essence gagnée conservée (109) |
+| Non-régression Essence | ✅ | Onglet Mutation Essence, Valeur de vente : 109 → 69 Essence, niveau 1/10 |
+| Console | ✅ | Aucune erreur des scripts du jeu |
+| Constat (Phase 4, non corrigé) | ◐ | Le bandeau d'un événement (« Pluie mutagène ») chevauche le haut d'un panneau ouvert ; titre lisible — suivi proposé |
+
+### 2.11 Phase 5, jalon C (automatisation) — validation Studio MCP du 2026-11-22 (Play solo, API désactivée)
+
+Boutons du panneau Automatisation cliqués, touche K, drones achetés à la station (E maintenue), rebirth par
+`RebirthRequest` ; `DevService` pour créditer des Coins.
+
+| Contrôle | Résultat | Observation |
+|---|---|---|
+| Démarrage | ✅ | « Serveur prêt (18 services) », schéma **v6**, réglages par défaut (drones actifs, vente coupée, 100 %) |
+| Panneau | ✅ | Touche K : comptoir « Installer : 5.00K Coins », seuils 50 / 75 / 100 %, drones, production (« 9 cases · 49 récoltes/min ») et statistiques |
+| Installation et seuil | ✅ | Clic : 40 000 → 35 000 Coins, comptoir installé et activé ; clic « 50 % » : seuil 50 |
+| Vente automatique | ✅ | 3 drones achetés (−14 625) ; 40 s : 31 récoltes de drones, 1 vente automatique de 20 objets (+250), sac jamais au-delà de 19 |
+| Pause des drones | ✅ | Clic « Actifs » → « En pause » : 0 récolte en 12 s, statut `paused` ×3, bulles « En pause » au-dessus des drones |
+| Sac plein | ✅ | Vente coupée : sac plein, drones `bag_full`, notification « Tes drones attendent : sac plein ! Réactive la vente automatique (panneau Automatisation). » |
+| Réactivation | ✅ | Clic « Coupé » → « Activé » : sac de 40 vendu aussitôt (sac 0, 3ᵉ vente automatique) ; les drones repartent à leur action suivante |
+| Triche | ✅ | Seuil 60, « 50 », NaN ; `drones` = 1 ; `autosell` = « non » ; action de 40 caractères ; table ; `buy_seller` ×2 (déjà installé) : aucun effet, aucune quarantaine |
+| Rebirth | ✅ | Comptoir et drones perdus ; réglages (seuil 50) et statistiques (95 récoltes de drones, 3 ventes, +1 000) conservés |
+| Console | ✅ | Aucune erreur des scripts du jeu |
+| Correctif d'affichage | ✅ | Ligne d'état du comptoir tronquée et statistiques petites : textes raccourcis, lignes de production agrandies (revérifié au jalon D, §2.12) |
+| Non vérifiable ici | ⛔ | Concurrence réelle vente au marché / comptoir à la même seconde (couverte en Lune), toucher, manette réelle |
+
+### 2.12 Phase 5, jalon D (production hors ligne) — validation Studio MCP du 2026-11-22 (Play solo, API désactivée)
+
+**Absences SIMULÉES** : sans place publiée, aucune vraie déconnexion / reconnexion avec le DataStore n'est possible
+(store en mémoire, remis à zéro à chaque Stop). Deux chemins ont été exercés avec le vrai code serveur :
+(1) le **chemin de chargement** (`DataService.AddLoadStep` → `OfflineService`), avec l'attribut Studio
+`ServerStorage.MutationFarmDevOfflineAway` posé en mode Édition sur la copie locale de la place (absence de 3 h au
+chargement) ; (2) la **même règle** sur le profil en jeu (`DevService` `offlineSimulate` : dernière sauvegarde et
+cultures reculées). Achats par les vraies invites et le remote `AutomationRequest` ; écran fermé par clic et par B.
+
+| Contrôle | Résultat | Observation |
+|---|---|---|
+| Démarrage | ✅ | « Serveur prêt (19 services) », schéma **v7** ; démarrage normal (sans attribut) : bilan « none », aucun écran |
+| Chemin de chargement, sans drone | ✅ (simulé) | Absence de 3 h au chargement : écran « Absent 3 h : aucun drone, rien n'a été récolté » + conseil ; « Super ! » → `report.seen = true`, écran masqué ; rien n'est compté (`countedSeconds = 0`) |
+| 3 h avec ouest, comptoir et 3 drones | ✅ (simulé) | 7 200 s comptées (plafond), **5 400 récoltes** (= 3 × 7 200 / 4), 135 ventes, **+79 250 Coins** (122 555 → 201 805), 18 objets au sac, 18/18 cultures replantées dans la fenêtre ; calcul 97 ms (profil en jeu, sans pause) |
+| Écran | ✅ | « Absent 3 h · production comptée : 2 h (plafond de 2 h) », « Tes drones ont récolté 5.40K plante(s) », « Le comptoir a vendu 135 fois : +79.2K Coins », « Ajouté à ton sac : 18 objet(s) » ; fermé par **B** (manette simulée) → lu |
+| Absence trop courte | ✅ (simulé) | 30 s : `too_short`, aucune récolte, aucun écran, bilan et totaux inchangés |
+| Sans comptoir (vente coupée, sac déjà plein) | ✅ (simulé) | 0 récolte, `stoppedBagFull`, Coins et sac (40/40) inchangés ; écran « Ton sac s'est rempli : tes drones se sont arrêtés… » |
+| Panneau Automatisation | ✅ | Ligne « Hors ligne : 3 h comptées au total · +79.2K Coins (2 h au plus par absence) » ; textes du jalon C revérifiés (plus de troncature) |
+| Stabilité | ✅ | Session de jeu restée ouverte plusieurs heures (3 drones + comptoir) : ≈ 13 600 récoltes de drones et 341 ventes automatiques, aucune erreur |
+| Console | ✅ | Aucune erreur des scripts du jeu ; journaux `[OfflineService]` attendus |
+| Défaut trouvé (outil de test) | ✅ | 1ʳᵉ simulation : 0 récolte, car seul l'horodatage de sauvegarde reculait (cultures « dans le futur ») ; l'outil Studio recule désormais aussi les cultures (en vraie absence, elles sont toujours antérieures à la sauvegarde ; la règle et les tests Lune n'étaient pas en cause) |
+| Non vérifiable ici | ⛔ | Vraie reconnexion avec le DataStore, changement de serveur, arrêt brutal du serveur pendant le calcul — protocole §2.4 (place publiée **avec accord** seulement) |
 
 ## 3. Studio MCP (opération manuelle, recommandée)
 

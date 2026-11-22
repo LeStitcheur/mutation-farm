@@ -11,6 +11,7 @@
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage.Shared
 local GameConfig = require(Shared.Config.GameConfig)
@@ -41,6 +42,9 @@ local SESSION_ID = HttpService:GenerateGUID(false)
 
 local profiles: { [Player]: Profile } = {}
 local loading: { [Player]: boolean } = {}
+-- Étapes de chargement (Phase 5 : production hors ligne) : appliquées à la donnée chargée AVANT qu'elle ne devienne
+-- vivante (aucun autre code ne peut encore la lire ni la modifier) ; elles peuvent céder la main.
+local loadSteps: { (Player, PlayerData) -> PlayerData? } = {}
 local store: DataStoreAdapter.Store? = nil
 local shuttingDown = false
 -- UserId dont la sauvegarde finale est en cours : un rejoin rapide sur CE serveur attend sa fin,
@@ -117,7 +121,9 @@ local function writeProfile(profile: Profile, release: boolean): boolean
 	accumulatePlayTime(profile)
 	local now = os.time()
 	local snapshot = Deep.copy(profile.data)
-	snapshot.meta.lastSeen = now
+	-- Horloge serveur synchronisée (comme plantedAt) : la production hors ligne compare ces deux horodatages
+	-- (Phase 5, revue : os.time() entier pouvait décaler la fenêtre d'une seconde). Le verrou garde os.time().
+	snapshot.meta.lastSeen = Workspace:GetServerTimeNow()
 	local valid, reason = DataSchema.validate(snapshot)
 	if not valid then
 		warn(
@@ -205,6 +211,21 @@ local function loadProfile(player: Player)
 			end
 			for _, note in notes do
 				warn(string.format("[DataService] %s : %s", key, note))
+			end
+			-- Étapes de chargement : une étape qui échoue est ignorée (la donnée d'avant est gardée, rien n'est perdu).
+			for _, step in loadSteps do
+				local ok, result = pcall(step, player, data)
+				if ok and result ~= nil then
+					data = result
+				elseif not ok then
+					warn(
+						string.format(
+							"[DataService] Étape de chargement en erreur pour %s : %s",
+							key,
+							tostring(result)
+						)
+					)
+				end
 			end
 			local profile: Profile = {
 				player = player,
@@ -362,6 +383,13 @@ function DataService.SaveNow(player: Player): boolean
 		kickLost(player)
 	end
 	return ok
+end
+
+-- Ajoute une étape de chargement (appelée dans Init des services) : `step(player, data)` reçoit la donnée chargée,
+-- migrée et assainie, AVANT qu'elle ne devienne vivante (ni remote ni service ne peut encore la lire) ; elle peut
+-- céder la main et retourner une donnée de remplacement (nil : inchangée). Une erreur laisse la donnée intacte.
+function DataService.AddLoadStep(step: (Player, PlayerData) -> PlayerData?)
+	table.insert(loadSteps, step)
 end
 
 function DataService.IsMemoryStore(): boolean

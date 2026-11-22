@@ -79,6 +79,9 @@ function HarvestRules.apply(
 	if tier == "perfect" then
 		data.stats.perfectHarvests += 1
 	end
+	if source == "drone" then
+		data.automation.stats.droneHarvests += 1 -- statistiques de production automatique (Phase 5)
+	end
 	data.farm.tiles[tileId] = nil
 	-- Bonus de précision (récolte manuelle uniquement) × multiplicateur de revenu (rebirth…) × familiers de
 	-- précision, appliqué une seule fois puis tronqué.

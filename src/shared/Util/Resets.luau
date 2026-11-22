@@ -50,6 +50,7 @@ local function resetEconomy(data: PlayerData)
 	data.bag.items = {}
 	data.upgrades.normal = {}
 	data.machines.drones = {}
+	data.machines.autoSeller = false -- comptoir automatique (Phase 5) : machine du cycle, comme les drones
 	Upgrades.grantStartingDrones(data)
 	data.farm.tiles = {}
 	data.progression.cycleCoins = BigNum.zero()

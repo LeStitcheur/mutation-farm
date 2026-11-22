@@ -1,12 +1,14 @@
 -- EconomySim — simulateur économique DÉTERMINISTE (Phase 3, jalon C). Rejoue une partie avec les règles pures du
--- jeu — HarvestRules, Economy, DroneLogic, ProgressionMath, Resets, Upgrades, MutationRoll — sans en recopier
--- aucune : seules les décisions du joueur (profil) sont modélisées. Pas de temps fixe (DT), mutations tirées avec
--- math.random après math.randomseed(graine) : même graine = même partie.
--- Hypothèses (docs/ECONOMY.md §8) : parcelle principale 3×3 ; récolte manuelle de la case mûre la plus ancienne
--- après `reaction` s (bonus Parfait ≤ 1,5 s, Bien ≤ 5 s), `moveTime` s entre deux récoltes ; vente quand le sac est
--- plein (aller-retour `sellTrip` s, récolte manuelle suspendue, drones actifs) ou toutes les `sellEvery` s.
--- Achats : graine suivante dès qu'elle est payable (et sélectionnée), drones jusqu'à `targetDrones`, rebirth et
--- prestige dès l'éligibilité, améliorations les moins chères d'abord.
+-- jeu — HarvestRules, Economy, DroneLogic, ProgressionMath, Resets, Upgrades, MutationRoll, Expansions — sans en
+-- recopier aucune : seules les décisions du joueur (profil) sont modélisées. Pas de temps fixe (DT), mutations tirées
+-- avec math.random après math.randomseed(graine) : même graine = même partie.
+-- Hypothèses (docs/ECONOMY.md §8) : cases des parcelles possédées ; récolte manuelle de la case mûre la plus
+-- ancienne après `reaction` s (bonus Parfait ≤ 1,5 s, Bien ≤ 5 s), `moveTime` s entre deux récoltes (+ `plotSwitch`
+-- s pour changer de parcelle) ; vente quand le sac est plein (aller-retour `sellTrip` s, récolte manuelle suspendue,
+-- drones actifs) ou toutes les `sellEvery` s.
+-- Achats : graine suivante dès qu'elle est payable (et sélectionnée), extensions (profils `expansions`) dès qu'elles
+-- sont payables, drones jusqu'à `targetDrones`, rebirth et prestige dès l'éligibilité, améliorations les moins
+-- chères d'abord.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -16,10 +18,12 @@ local DroneConfig = require(Shared.Config.DroneConfig)
 local UpgradeConfig = require(Shared.Config.UpgradeConfig)
 local MutationConfig = require(Shared.Config.MutationConfig)
 local GameConfig = require(Shared.Config.GameConfig)
+local Automation = require(Shared.Util.Automation)
 local BigNum = require(Shared.Util.BigNum)
 local DataSchema = require(Shared.Util.DataSchema)
 local DroneLogic = require(Shared.Util.DroneLogic)
 local Economy = require(Shared.Util.Economy)
+local Expansions = require(Shared.Util.Expansions)
 local FarmLayout = require(Shared.Util.FarmLayout)
 local Growth = require(Shared.Util.Growth)
 local HarvestRules = require(Shared.Util.HarvestRules)
@@ -31,7 +35,7 @@ local Upgrades = require(Shared.Util.Upgrades)
 local MutationOdds = require(ServerScriptService.Server.Config.MutationOdds)
 
 local DT = 0.25
-local TILES = FarmLayout.tileIds("main")
+local DEFAULT_PLOT_SWITCH = 2 -- s : changer de parcelle (allée, escalier de la terrasse)
 
 local EconomySim = {
 	DT = DT,
@@ -45,6 +49,7 @@ EconomySim.Profiles = {
 		moveTime = 1.2,
 		sellTrip = 8,
 		targetDrones = 0,
+		expansions = true,
 	},
 	hybrid = {
 		name = "2. Hybride, 1 drone",
@@ -53,6 +58,7 @@ EconomySim.Profiles = {
 		moveTime = 1.5,
 		sellTrip = 8,
 		targetDrones = 1,
+		expansions = true,
 	},
 	automated = {
 		name = "3. Principalement automatisé",
@@ -63,6 +69,19 @@ EconomySim.Profiles = {
 		sellTrip = 8,
 		sellEvery = 120,
 		targetDrones = 3,
+		expansions = true,
+	},
+	-- Phase 5 : principalement automatisé avec le comptoir automatique (aucun aller-retour au marché après l'achat).
+	automatedSeller = {
+		name = "3 bis. Automatisé + comptoir automatique",
+		manual = true,
+		manualUntilDrones = 1,
+		reaction = 3.0,
+		moveTime = 1.5,
+		sellTrip = 8,
+		targetDrones = 3,
+		expansions = true,
+		autoSeller = true,
 	},
 	advanced = {
 		name = "4. Avancé (rebirths, prestige, améliorations)",
@@ -74,8 +93,19 @@ EconomySim.Profiles = {
 		rebirth = true,
 		prestige = true,
 		buyUpgrades = true,
+		coinUpgrades = true, -- améliorations normales (Phase 5) : coût ≤ 20 % du solde
+		expansions = true,
 	},
 }
+
+-- Copie d'un profil avec des champs remplacés (mesures comparatives du rapport).
+function EconomySim.variant(profile, overrides)
+	local copy = table.clone(profile)
+	for key, value in overrides do
+		copy[key] = value
+	end
+	return copy
+end
 
 -- Variabilité du joueur (réaction et cadence ±) : générateur congruentiel SÉPARÉ, à graine fixe. Il ne consomme pas
 -- la suite des mutations (math.random) : deux parties de même graine gardent les mêmes mutations dans l'ordre des
@@ -124,8 +154,13 @@ local function plant(sim, tileId: string)
 	}
 end
 
+-- Cases cultivables : celles des parcelles possédées (extensions comprises), recalculées à chaque achat ou reset.
+local function refreshTiles(sim)
+	sim.tiles = Expansions.unlockedTiles(sim.data)
+end
+
 local function replantAll(sim)
-	for _, tileId in TILES do
+	for _, tileId in sim.tiles do
 		if sim.data.farm.tiles[tileId] == nil then
 			plant(sim, tileId)
 		end
@@ -166,12 +201,16 @@ function EconomySim.new(profile, seed: number, data, frozen: boolean?)
 		sellingUntil = nil,
 		nextPeriodicSell = profile.sellEvery or math.huge,
 		drones = {},
+		tiles = {},
+		lastPlot = "main",
 		events = {}, -- { kind, time, detail }
 		manualHarvests = 0,
 		droneHarvests = 0,
+		autoSales = 0,
 		coinsBySource = { player = 0, drone = 0 },
 	}
 	sim.data.farm.tiles = {}
+	refreshTiles(sim)
 	replantAll(sim)
 	rebuildFleet(sim)
 	return sim
@@ -192,6 +231,11 @@ local function harvest(sim, tileId: string, source: string): boolean
 		sim.manualHarvests += 1
 	else
 		sim.droneHarvests += 1
+	end
+	-- Comptoir automatique (Phase 5) : même règle pure que le serveur, appelée juste après chaque récolte.
+	local sale = Automation.autoSell(data, sim.now)
+	if sale then
+		sim.autoSales += 1
 	end
 	plant(sim, tileId)
 	return true
@@ -215,7 +259,8 @@ local function buyCheapestUpgrades(sim)
 		for _, def in UpgradeConfig.List do
 			local level = Upgrades.level(data, def.id)
 			local useless = def.effect == "droneSpeed" and sim.profile.targetDrones == 0
-			if level < def.maxLevel and not useless then
+			-- L'arbre Coins (améliorations normales) suit sa propre règle (buyCoinUpgrades).
+			if def.tree ~= "coins" and level < def.maxLevel and not useless then
 				local cost = Upgrades.cost(def, level)
 				local affordable = not BigNum.lt(Upgrades.balance(data, def.tree), cost)
 				-- Comparaison entre arbres : un Primal Core pèse comme ~100 Essence.
@@ -233,6 +278,71 @@ local function buyCheapestUpgrades(sim)
 	end
 end
 
+-- Améliorations normales (arbre Coins, Phase 5) : la moins chère, seulement si elle coûte au plus `COIN_UPGRADE_SHARE`
+-- du solde (le joueur garde l'essentiel pour la graine suivante). Sac : seulement pour un joueur qui compte sur ses
+-- drones (pour un joueur présent, la vente par habitude rend des places en plus inutiles, §8).
+local COIN_UPGRADE_SHARE = 0.2
+local function buyCoinUpgrades(sim)
+	local data = sim.data
+	while true do
+		local best, bestLevel, bestCost = nil, 0, nil
+		for _, def in Upgrades.list("coins") do
+			local level = Upgrades.level(data, def.id)
+			local useless = def.effect == "bag" and sim.profile.targetDrones == 0
+			if level < def.maxLevel and not useless then
+				local cost = BigNum.toNumber(Upgrades.cost(def, level))
+				if bestCost == nil or cost < bestCost then
+					best, bestLevel, bestCost = def, level, cost
+				end
+			end
+		end
+		if not best or not bestCost or bestCost > COIN_UPGRADE_SHARE * BigNum.toNumber(data.currencies.coins) then
+			return
+		end
+		assert(Upgrades.purchase(data, best.id, bestLevel))
+		table.insert(sim.events, { kind = "coinUpgrade", time = sim.now, detail = best.id .. " " .. (bestLevel + 1) })
+	end
+end
+
+local function afterReset(sim)
+	refreshTiles(sim)
+	replantAll(sim)
+	rebuildFleet(sim)
+end
+
+local function manualActive(sim): boolean
+	local profile = sim.profile
+	if not profile.manual then
+		return false
+	end
+	local untilDrones = profile.manualUntilDrones
+	return untilDrones == nil or DroneLogic.owned(sim.data, "harvester") < untilDrones
+end
+
+-- Récoltes par seconde que le joueur et ses drones peuvent assurer, et que les cases possédées produisent avec la
+-- graine actuelle. Un joueur raisonnable n'achète une extension que si ses cases ne suffisent plus à occuper ses
+-- récolteurs : sinon les nouvelles cases ne produisent rien de plus (récolteurs saturés) et l'achat retarde
+-- seulement la graine suivante (constat du simulateur, docs/ECONOMY.md §12).
+local function harvestCapacity(sim): number
+	local rate = 0
+	if manualActive(sim) then
+		rate += 1 / (sim.profile.moveTime + DEFAULT_PLOT_SWITCH / 2)
+	end
+	for _, drone in sim.drones do
+		rate += drone.def.capacity / DroneLogic.interval(drone.def, sim.data)
+	end
+	return rate
+end
+
+local function farmProduction(sim): number
+	local data = sim.data
+	local waiting = if manualActive(sim) then sim.profile.reaction or 0 else 0
+	if #sim.drones > 0 and not manualActive(sim) then
+		waiting = sim.drones[1].def.graceDelay
+	end
+	return #sim.tiles / (Economy.growTime(data, data.seeds.selected) + waiting)
+end
+
 local function purchases(sim)
 	local data = sim.data
 	local profile = sim.profile
@@ -246,6 +356,18 @@ local function purchases(sim)
 		data.seeds.selected = nextPlant.id
 		table.insert(sim.events, { kind = "seed", time = sim.now, detail = nextPlant.id })
 	end
+	-- Extension suivante dès qu'elle est payable ET utile (récolteurs sous-occupés) ; règle pure du serveur.
+	local expansion = if profile.expansions then Expansions.nextToBuy(data) else nil
+	if
+		expansion
+		and Expansions.canBuy(data, expansion.plotId)
+		and (profile.expansions == "always" or farmProduction(sim) < harvestCapacity(sim))
+	then
+		assert(Expansions.purchase(data, expansion.plotId))
+		refreshTiles(sim)
+		replantAll(sim)
+		table.insert(sim.events, { kind = "expansion", time = sim.now, detail = expansion.plotId })
+	end
 	-- Drones jusqu'à la cible.
 	local def = DroneConfig.get("harvester")
 	while def and DroneLogic.owned(data, def.id) < profile.targetDrones and DroneLogic.canBuy(data, def.id) do
@@ -255,17 +377,23 @@ local function purchases(sim)
 		rebuildFleet(sim)
 		table.insert(sim.events, { kind = "drone", time = sim.now, detail = tostring(data.machines.drones[def.id]) })
 	end
+	-- Comptoir automatique (Phase 5) dès le premier drone (règle pure du serveur ; à racheter après chaque rebirth).
+	if profile.autoSeller and DroneLogic.owned(data, "harvester") >= 1 and Automation.canBuySeller(data) then
+		assert(Automation.buySeller(data))
+		table.insert(sim.events, { kind = "autoSeller", time = sim.now, detail = "" })
+	end
 	-- Transitions (règles pures du serveur).
 	if profile.prestige and ProgressionMath.canPrestige(data) then
 		local outcome = assert(Resets.prestige(data, data.progression.revision))
 		table.insert(sim.events, { kind = "prestige", time = sim.now, detail = BigNum.toNumber(outcome.cores) })
-		replantAll(sim)
-		rebuildFleet(sim)
+		afterReset(sim)
 	elseif profile.rebirth and ProgressionMath.canRebirth(data) then
 		local outcome = assert(Resets.rebirth(data, data.progression.revision))
 		table.insert(sim.events, { kind = "rebirth", time = sim.now, detail = BigNum.toNumber(outcome.essence) })
-		replantAll(sim)
-		rebuildFleet(sim)
+		afterReset(sim)
+	end
+	if profile.coinUpgrades then
+		buyCoinUpgrades(sim)
 	end
 	if profile.buyUpgrades then
 		local before = DroneLogic.owned(data, "harvester")
@@ -276,13 +404,17 @@ local function purchases(sim)
 	end
 end
 
--- Prochain achat visé par le joueur (graine suivante, puis drone manquant) : prix en Coins, ou nil.
+-- Prochain achat visé par le joueur (graine suivante, extension, drone manquant) : prix en Coins, ou nil.
 local function nextPurchasePrice(sim): number?
 	local data = sim.data
 	local best: number? = nil
 	local nextPlant = PlantConfig.nextAfter(data.seeds.selected)
 	if nextPlant and not data.seeds.unlocked[nextPlant.id] then
 		best = nextPlant.unlockPrice
+	end
+	local expansion = if sim.profile.expansions then Expansions.nextToBuy(data) else nil
+	if expansion and farmProduction(sim) < harvestCapacity(sim) then
+		best = if best then math.min(best, expansion.price) else expansion.price
 	end
 	local def = DroneConfig.get("harvester")
 	if def and DroneLogic.owned(data, def.id) < sim.profile.targetDrones then
@@ -308,15 +440,6 @@ local function shouldSellEarly(sim): boolean
 	end
 	local bag = BigNum.toNumber(Economy.sellValue(data.bag.items, ProgressionMath.incomeMultiplier(data)))
 	return coins + bag >= price
-end
-
-local function manualActive(sim): boolean
-	local profile = sim.profile
-	if not profile.manual then
-		return false
-	end
-	local untilDrones = profile.manualUntilDrones
-	return untilDrones == nil or DroneLogic.owned(sim.data, "harvester") < untilDrones
 end
 
 function EconomySim.step(sim)
@@ -361,7 +484,7 @@ function EconomySim.step(sim)
 				sim.sellingUntil = now + profile.sellTrip
 			else
 				local target, oldest = nil, math.huge
-				for _, tileId in TILES do
+				for _, tileId in sim.tiles do
 					local tile = data.farm.tiles[tileId]
 					if tile then
 						local ripeAt = Growth.ripeAt(tile)
@@ -371,9 +494,13 @@ function EconomySim.step(sim)
 					end
 				end
 				if target and harvest(sim, target, "player") then
-					-- Réaction ×[0,6 ; 1,4] et cadence ×[0,8 ; 1,2] autour des valeurs du profil.
+					-- Réaction ×[0,6 ; 1,4] et cadence ×[0,8 ; 1,2] autour des valeurs du profil ; changer de
+					-- parcelle coûte un trajet.
+					local plotId = FarmLayout.parseTileId(target)
+					local travel = if plotId ~= sim.lastPlot then profile.plotSwitch or DEFAULT_PLOT_SWITCH else 0
+					sim.lastPlot = plotId or sim.lastPlot
 					sim.reaction = profile.reaction * (0.6 + 0.8 * sim.jitter())
-					sim.nextManual = now + profile.moveTime * (0.8 + 0.4 * sim.jitter())
+					sim.nextManual = now + profile.moveTime * (0.8 + 0.4 * sim.jitter()) + travel
 				end
 			end
 		end
@@ -411,12 +538,28 @@ function EconomySim.eventTimes(sim, kind: string): { number }
 end
 
 -- Coins gagnés par minute en régime établi : une seule graine, aucun achat ni transition, `duration` s.
-function EconomySim.steadyIncome(profile, plantId: string, drones: number, duration: number, seed: number): number
+-- `plots` : parcelles possédées en plus de la parcelle de départ (ex. { "west" }) ; `prepare` : réglages
+-- supplémentaires de la donnée de départ (ex. comptoir automatique installé).
+function EconomySim.steadyIncome(
+	profile,
+	plantId: string,
+	drones: number,
+	duration: number,
+	seed: number,
+	plots: { string }?,
+	prepare: ((any) -> ())?
+): number
 	local data = DataSchema.template(0)
 	data.seeds.unlocked[plantId] = true
 	data.seeds.selected = plantId
 	if drones > 0 then
 		data.machines.drones.harvester = drones
+	end
+	for _, plotId in plots or {} do
+		data.farm.plots[plotId] = true
+	end
+	if prepare then
+		prepare(data)
 	end
 	local sim = EconomySim.new(profile, seed, data, true)
 	while sim.now < duration do

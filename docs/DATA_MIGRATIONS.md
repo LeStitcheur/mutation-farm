@@ -38,7 +38,9 @@ donnée brute ──> version future ? ── oui ──> refus (aucune écritur
 | 2 | Phase 3, jalon A | Progression : `revision`, `cycleCoins`, `prestigeCoins` ; `stats.totalRebirths` ; `meta.quarantine` |
 | 3 | Phase 4, jalon A | Mutadex : `mutadex[clé] = { firstAt, count }` (au lieu d'un horodatage) ; `mutadexRewards` (paliers accordés) |
 | 4 | Phase 4, jalon B | Familiers : `pets.instances` (instances uniques), `equipped` = identifiants d'instances, `nextSerial`, `hatched`, `freeEggs` |
-| **5** | Phase 4, jalon D | Missions : `quests.daily` / `quests.weekly` (`period`, `missions`), `quests.claimed` ; `boosts` (fin des boosts temporaires) |
+| 5 | Phase 4, jalon D | Missions : `quests.daily` / `quests.weekly` (`period`, `missions`), `quests.claimed` ; `boosts` (fin des boosts temporaires) |
+| 6 | Phase 5, jalon C | Automatisation : `machines.autoSeller` (comptoir de vente automatique, machine du cycle) ; `automation` (`dronesEnabled`, `autoSellEnabled`, `autoSellThreshold`, `stats` : récoltes de drones, ventes et Coins du comptoir) |
+| **7** | Phase 5, jalon D | Production hors ligne : `offline` (`settledAt` : règlement idempotent ; `report` : bilan « Pendant ton absence » ; `totalSeconds`, `totalCoins`) |
 
 ### Migration v1 → v2 (`MIGRATIONS[2]`)
 - `progression.revision = 0`.
@@ -77,6 +79,27 @@ Conséquence : un joueur v1 ayant déjà gagné ≥ 100 000 Coins peut faire son
   quarantaine tel quel puis est tiré à nouveau ; compteur `claimed` invalide → 0 (quarantaine) ; boost malformé →
   quarantaine ; boost inconnu bien formé → conservé, sans effet.
 
+### Migration v5 → v6 (`MIGRATIONS[6]`, automatisation)
+- Aucune transformation : `machines.autoSeller` (`false` : comptoir non installé) et `automation` (drones actifs,
+  vente automatique coupée, seuil 100 %, statistiques à zéro) sont ajoutés par la réconciliation. Les drones déjà
+  possédés restent actifs ; **aucun champ v5 n'est modifié** (testé champ par champ, `Automation.spec`).
+- Assainissement : seuil hors de la liste (50, 75, 100) → quarantaine, défaut 100 % ; compteurs de statistiques non
+  entiers ou négatifs → quarantaine, 0 ; montant `autoSellCoins` invalide → quarantaine (la réconciliation remplace
+  d'abord une mantisse non numérique, chemin `automation.stats.autoSellCoins.m`) ; booléen d'un autre type
+  (`machines.autoSeller`, réglages) → quarantaine, valeur par défaut.
+- Rebirth et prestige : `machines.autoSeller` repasse à `false` (machine du cycle) ; `automation` est conservé.
+
+### Migration v6 → v7 (`MIGRATIONS[7]`, production hors ligne)
+- Aucune transformation : `offline` (`settledAt = 0`, bilan vide marqué lu, totaux à zéro) est ajouté par la
+  réconciliation ; **aucun champ v6 n'est modifié** (testé champ par champ, `Offline.spec`). Avec `settledAt = 0`, la
+  première absence comptée après la mise à jour part de la dernière sauvegarde (`meta.lastSeen`), plafonnée à 2 h.
+- Assainissement : `settledAt` non horodatage → quarantaine, 0 ; `totalSeconds` non entier ou négatif → quarantaine,
+  0 ; `totalCoins` invalide → quarantaine, 0 ; bilan malformé (durée comptée au-delà de 7 200 s, compteurs invalides,
+  montant invalide) → quarantaine tel quel, bilan vide. Aucun gain ne dépend de ces valeurs (les gains sont crédités
+  au moment du calcul) : une donnée trafiquée ne peut rien rapporter.
+- Calcul de l'absence : étape de chargement de `DataService` (`AddLoadStep`) appliquée **après** migration et
+  assainissement, sur une copie du profil (`docs/AUTOMATION.md` §8).
+
 ### Réconciliation : types incompatibles (correctif Phase 4)
 Avant la Phase 4, `DataSchema.reconcile` remplaçait **silencieusement** une valeur d'un autre type que le gabarit
 (ex. `stats.harvests = "douze"` → 0, `cosmetics = 7` → table vide). Désormais chaque remplacement est consigné
@@ -89,7 +112,8 @@ Entrée : `{ path, value, reason, at }` (`Types.QuarantineEntry`).
 - `value` : valeur d'origine si elle est sérialisable en JSON, sinon sa représentation texte (`tostring`).
 - Liste FIFO bornée à `GameConfig.Data.MaxQuarantine` (100) : au-delà, les plus anciennes entrées sortent.
 - Couvre : montants `BigNum` invalides ou négatifs (monnaies, `coinsEarned`, `cycleCoins`, `prestigeCoins`),
-  parcelles et cases inconnues ou invalides, objets du sac, graines inconnues, sélection non débloquée, drones
+  parcelles et cases inconnues ou invalides (Phase 5 : état de parcelle non booléen → parcelle verrouillée ; le
+  champ `farm.plots` existait déjà, aucune nouvelle version), objets du sac, graines inconnues, sélection non débloquée, drones
   inconnus ou au-delà du maximum, compteurs invalides (`rebirths`, `prestiges`, `revision`, `totalRebirths`,
   `rebirthTokens`), reçus non textuels, liste de quarantaine elle-même invalide, **niveaux d'améliorations**
   (Phase 3, jalon C : identifiant inconnu ou rangé dans le mauvais arbre, niveau non entier, négatif ou nul →

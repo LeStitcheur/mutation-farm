@@ -11,6 +11,7 @@ local UpgradeConfig = require(script.Parent.Parent.Config.UpgradeConfig)
 local MutadexConfig = require(script.Parent.Parent.Config.MutadexConfig)
 local PetConfig = require(script.Parent.Parent.Config.PetConfig)
 local QuestConfig = require(script.Parent.Parent.Config.QuestConfig)
+local AutomationConfig = require(script.Parent.Parent.Config.AutomationConfig)
 local BigNum = require(script.Parent.BigNum)
 local Deep = require(script.Parent.Deep)
 local Economy = require(script.Parent.Economy)
@@ -20,7 +21,7 @@ local FarmLayout = require(script.Parent.FarmLayout)
 type PlayerData = Types.PlayerData
 type Migration = (any) -> any
 
-local VERSION = 5
+local VERSION = 7
 local MAX_DEPTH = 16
 local MAX_LEGACY_PETS = 1000 -- v1–v3 : au-delà, un compteur d'exemplaires est jugé corrompu (laissé tel quel)
 
@@ -133,7 +134,40 @@ local MIGRATIONS: { [number]: Migration } = {
 	[5] = function(data: any): any
 		return data
 	end,
+	-- v6 (Phase 5, automatisation) : `machines.autoSeller` (comptoir non installé) et `automation` (réglages par
+	-- défaut : drones actifs, vente automatique coupée, seuil 100 % ; statistiques à zéro) sont ajoutés par la
+	-- réconciliation. Les drones déjà possédés restent actifs. Aucune transformation : rien d'existant n'est touché
+	-- ni supprimé ; une valeur inattendue (champ jamais écrit avant la v6, table `machines` corrompue) est remplacée
+	-- par la réconciliation et conservée en quarantaine.
+	[6] = function(data: any): any
+		return data
+	end,
+	-- v7 (Phase 5, production hors ligne) : `offline` (aucun bilan, totaux à zéro) est ajouté par la réconciliation ;
+	-- `settledAt = 0` : la première absence comptée part de la dernière sauvegarde (`meta.lastSeen`), plafonnée à
+	-- 2 h comme toute absence. Aucune transformation, rien n'est supprimé.
+	[7] = function(data: any): any
+		return data
+	end,
 }
+
+-- Bilan hors ligne vide (aucun calcul encore fait), déjà « vu » : aucun écran à afficher.
+local function emptyOfflineReport(): any
+	return {
+		at = 0,
+		awaySeconds = 0,
+		countedSeconds = 0,
+		harvests = 0,
+		sales = 0,
+		coins = BigNum.zero(),
+		bagAdded = 0,
+		discoveries = 0,
+		levelUps = 0,
+		missions = 0,
+		stoppedBagFull = false,
+		reason = "none",
+		seen = true,
+	}
+end
 
 local DataSchema = {
 	VERSION = VERSION,
@@ -166,6 +200,23 @@ function DataSchema.template(now: number): PlayerData
 		},
 		machines = {
 			drones = {},
+			autoSeller = false,
+		},
+		automation = {
+			dronesEnabled = true,
+			autoSellEnabled = false,
+			autoSellThreshold = AutomationConfig.DefaultThreshold,
+			stats = {
+				droneHarvests = 0,
+				autoSells = 0,
+				autoSellCoins = BigNum.zero(),
+			},
+		},
+		offline = {
+			settledAt = 0,
+			report = emptyOfflineReport(),
+			totalSeconds = 0,
+			totalCoins = BigNum.zero(),
 		},
 		progression = {
 			rebirths = 0,
@@ -310,11 +361,15 @@ function DataSchema.sanitize(data: PlayerData, now: number?): { string }
 		end
 	end
 
-	-- Parcelles : uniquement des identifiants connus ; la parcelle principale est toujours débloquée.
+	-- Parcelles : uniquement des identifiants connus et des booléens (extensions achetées, Phase 5) ; la parcelle
+	-- principale est toujours débloquée.
 	for plotId, unlocked in data.farm.plots do
 		if not FarmLayout.getPlot(plotId) then
 			data.farm.plots[plotId] = nil
 			quarantine(data, notes, "farm.plots." .. tostring(plotId), unlocked, "parcelle inconnue", at)
+		elseif type(unlocked) ~= "boolean" then
+			data.farm.plots[plotId] = nil
+			quarantine(data, notes, "farm.plots." .. plotId, unlocked, "état de parcelle invalide -> verrouillée", at)
 		end
 	end
 	for plotId, unlocked in FarmLayout.defaultPlots() do
@@ -386,8 +441,9 @@ function DataSchema.sanitize(data: PlayerData, now: number?): { string }
 		end
 	end
 
-	-- Améliorations des arbres Essence (upgrades.rebirth) et Primal Cores (upgrades.permanent) : identifiants connus
-	-- dans le bon arbre, niveaux entiers ≥ 1, plafonnés au maximum. upgrades.normal : pas encore de catalogue.
+	-- Améliorations des arbres Coins (upgrades.normal, Phase 5), Essence (upgrades.rebirth) et Primal Cores
+	-- (upgrades.permanent) : identifiants connus dans le bon arbre, niveaux entiers ≥ 1, plafonnés au maximum.
+	-- upgrades.normal existait depuis la v1 sans catalogue (jamais écrit par le jeu) : seul son contenu est validé.
 	for _, tree in UpgradeConfig.Trees do
 		local container = (data.upgrades :: any)[tree.storage]
 		if type(container) ~= "table" then
@@ -564,6 +620,72 @@ function DataSchema.sanitize(data: PlayerData, now: number?): { string }
 			raw.boosts[key] = nil
 			quarantine(data, notes, "boosts." .. tostring(key), value, "boost invalide", at)
 		end
+	end
+
+	-- Automatisation (Phase 5, v6) : seuil parmi ceux proposés, statistiques entières et montant valide. Les booléens
+	-- (comptoir, réglages) d'un autre type ont déjà été remplacés par la réconciliation (quarantaine).
+	local automation = raw.automation
+	if not table.find(AutomationConfig.Thresholds, automation.autoSellThreshold) then
+		quarantine(
+			data,
+			notes,
+			"automation.autoSellThreshold",
+			automation.autoSellThreshold,
+			"seuil invalide -> défaut",
+			at
+		)
+		automation.autoSellThreshold = AutomationConfig.DefaultThreshold
+	end
+	for _, field in { "droneHarvests", "autoSells" } do
+		if not isNonNegativeInteger(automation.stats[field]) then
+			quarantine(data, notes, "automation.stats." .. field, automation.stats[field], "compteur invalide -> 0", at)
+			automation.stats[field] = 0
+		end
+	end
+	if not BigNum.isValid(automation.stats.autoSellCoins) or BigNum.isNegative(automation.stats.autoSellCoins) then
+		quarantine(
+			data,
+			notes,
+			"automation.stats.autoSellCoins",
+			automation.stats.autoSellCoins,
+			"montant invalide -> 0",
+			at
+		)
+		automation.stats.autoSellCoins = BigNum.zero()
+	end
+
+	-- Production hors ligne (Phase 5, v7) : horodatage de règlement plausible, bilan bien formé, totaux valides. Un
+	-- bilan invalide est mis en quarantaine tel quel et remplacé par un bilan vide (aucun gain n'en dépend : les gains
+	-- sont déjà crédités au moment du calcul).
+	local offline = raw.offline
+	if not isTimestamp(offline.settledAt) then
+		quarantine(data, notes, "offline.settledAt", offline.settledAt, "horodatage invalide -> 0", at)
+		offline.settledAt = 0
+	end
+	if not isNonNegativeInteger(offline.totalSeconds) then
+		quarantine(data, notes, "offline.totalSeconds", offline.totalSeconds, "compteur invalide -> 0", at)
+		offline.totalSeconds = 0
+	end
+	if not BigNum.isValid(offline.totalCoins) or BigNum.isNegative(offline.totalCoins) then
+		quarantine(data, notes, "offline.totalCoins", offline.totalCoins, "montant invalide -> 0", at)
+		offline.totalCoins = BigNum.zero()
+	end
+	local report = offline.report
+	local reportValid = isTimestamp(report.at)
+		and isTimestamp(report.awaySeconds)
+		and isTimestamp(report.countedSeconds)
+		and report.countedSeconds <= GameConfig.Offline.MaxSeconds
+		and isNonNegativeInteger(report.harvests)
+		and isNonNegativeInteger(report.sales)
+		and BigNum.isValid(report.coins)
+		and not BigNum.isNegative(report.coins)
+		and isNonNegativeInteger(report.bagAdded)
+		and isNonNegativeInteger(report.discoveries)
+		and isNonNegativeInteger(report.levelUps)
+		and isNonNegativeInteger(report.missions)
+	if not reportValid then
+		quarantine(data, notes, "offline.report", report, "bilan hors ligne invalide -> vide", at)
+		offline.report = emptyOfflineReport()
 	end
 
 	-- Compteurs.

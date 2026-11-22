@@ -26,7 +26,10 @@ return function()
 		local data = DataSchema.template(0)
 		data.progression.rebirths = 1
 		if upgradeId then
-			data.upgrades.rebirth[upgradeId] = 1
+			-- Rangée dans le conteneur de son arbre (Coins : upgrades.normal ; Essence : upgrades.rebirth).
+			local def = assert(Upgrades.get(upgradeId))
+			local storage = if def.tree == "coins" then "normal" else "rebirth"
+			data.upgrades[storage][upgradeId] = 1
 		end
 		local sim = EconomySim.new(profile, seed, data)
 		while sim.now < window do
@@ -70,6 +73,45 @@ return function()
 			-- Joueur attentif (réaction 3 s < délai de grâce 5 s) : le drone ne lui prend presque rien.
 			local hybridTotal = hybrid.coinsBySource.player + hybrid.coinsBySource.drone
 			expect(hybrid.coinsBySource.drone / hybridTotal < 0.1).to.equal(true)
+		end)
+	end)
+
+	describe("extensions de ferme (Phase 5)", function()
+		-- Doubler les cases n'aide que si les récolteurs ne sont pas déjà saturés : à partir de la Citrouille (35 s),
+		-- 9 cases ne suffisent plus à occuper un joueur actif ni 3 drones (docs/ECONOMY.md §12, H1).
+		it("une extension augmente nettement le revenu dès que les récolteurs ne sont plus saturés", function()
+			local dronesOnly = { name = "drones", manual = false, sellTrip = 8, sellEvery = 120, targetDrones = 3 }
+			for _, case in { { profiles.active, 0 }, { dronesOnly, 3 } } do
+				local profile, drones = case[1], case[2]
+				for _, plantId in { "pumpkin", "moonshroom" } do
+					local base, extended = 0, 0
+					for _, seed in { 1, 2 } do
+						base += EconomySim.steadyIncome(profile, plantId, drones, 600, seed)
+						extended += EconomySim.steadyIncome(profile, plantId, drones, 600, seed, { "west" })
+					end
+					expect(extended > base * 1.3).to.equal(true)
+				end
+			end
+		end)
+	end)
+
+	describe("comptoir automatique (Phase 5)", function()
+		-- Même règle de vente que le marché : le comptoir ne crée aucune valeur, il évite seulement que les drones
+		-- s'arrêtent sac plein entre deux passages (docs/ECONOMY.md §14, J2).
+		it("drones seuls : le comptoir rapporte au moins autant que des ventes toutes les 2 min", function()
+			local nobody = { name = "personne", manual = false, sellTrip = 1e9, sellEvery = 1e9, targetDrones = 3 }
+			local periodic = { name = "2 min", manual = false, sellTrip = 8, sellEvery = 120, targetDrones = 3 }
+			local function seller(data)
+				data.machines.autoSeller = true
+				data.automation.autoSellEnabled = true
+			end
+			for _, plantId in { "carrot", "pumpkin" } do
+				for _, seed in { 1, 2 } do
+					local manual = EconomySim.steadyIncome(periodic, plantId, 3, 600, seed)
+					local auto = EconomySim.steadyIncome(nobody, plantId, 3, 600, seed, nil, seller)
+					expect(auto >= manual * 0.99).to.equal(true)
+				end
+			end
 		end)
 	end)
 
@@ -127,6 +169,40 @@ return function()
 			end
 			expect(#failures).to.equal(0)
 		end)
+
+		-- Améliorations normales (Phase 5) : mêmes garanties, mesurées sur la même fenêtre (docs/ECONOMY.md §13).
+		it(
+			"aucune amélioration normale ne réduit le revenu ; Récoltes de qualité l'augmente d'au moins 5 %",
+			function()
+				local window = 20 * MINUTE
+				local failures = {}
+				for _, key in { "active", "automated" } do
+					for _, seed in { 1, 2 } do
+						local reference = windowRate(profiles[key], nil, seed, window)
+						for _, def in Upgrades.list("coins") do
+							local rate = windowRate(profiles[key], def.id, seed, window)
+							local floor = if def.id == "coins_value" then 1.05 else 0.99
+							if rate < reference * floor then
+								table.insert(
+									failures,
+									string.format(
+										"%s / %s / graine %d : %+.1f %%",
+										key,
+										def.id,
+										seed,
+										100 * (rate / reference - 1)
+									)
+								)
+							end
+						end
+					end
+				end
+				if #failures > 0 then
+					print("    " .. table.concat(failures, "\n    "))
+				end
+				expect(#failures).to.equal(0)
+			end
+		)
 
 		it("Efficacité des drones agit dès le premier niveau (intervalle non arrondi au pas de la boucle)", function()
 			local window = 20 * MINUTE

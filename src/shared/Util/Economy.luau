@@ -93,6 +93,19 @@ function Economy.bagCount(data: PlayerData): number
 	return Inventory.count(data.bag.items)
 end
 
+-- Dépense de Coins : vérification et débit indissociables, jamais de solde négatif (invariant 5). Utilisée par
+-- EconomyService.TrySpendCoins et par les règles d'achat pures exécutées dans un mutateur (extensions…).
+function Economy.trySpend(data: PlayerData, amount: BigNum): boolean
+	if BigNum.isNegative(amount) or not BigNum.isValid(amount) then
+		return false
+	end
+	if BigNum.lt(data.currencies.coins, amount) then
+		return false
+	end
+	data.currencies.coins = BigNum.sub(data.currencies.coins, amount)
+	return true
+end
+
 export type UnlockFailure = "unknown" | "already_unlocked" | "locked_order" | "insufficient_funds"
 
 function Economy.canUnlockSeed(data: PlayerData, plantId: string): (boolean, UnlockFailure?)

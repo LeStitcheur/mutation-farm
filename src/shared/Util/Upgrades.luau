@@ -154,6 +154,18 @@ function Upgrades.valueMultiplier(data: PlayerData, tree: TreeId?): number
 	return product(data, "value", 1, tree)
 end
 
+-- Multiplicateur de revenu de tous les arbres SAUF `excluded` (aperçu de ce qui survit à un rebirth : les
+-- améliorations normales en Coins sont perdues).
+function Upgrades.valueMultiplierExcept(data: PlayerData, excluded: TreeId): number
+	local result = 1
+	for _, def in UpgradeConfig.List do
+		if def.effect == "value" and def.tree ~= excluded then
+			result *= 1 + def.perLevel * Upgrades.level(data, def.id)
+		end
+	end
+	return result
+end
+
 -- Facteur de durée de pousse (≥ MinGrowthFactor).
 function Upgrades.growthFactor(data: PlayerData): number
 	return math.max(UpgradeConfig.Caps.MinGrowthFactor, product(data, "growth", -1))

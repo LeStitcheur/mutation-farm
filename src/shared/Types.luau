@@ -45,6 +45,19 @@ export type PlayerData = {
 	},
 	machines: {
 		drones: { [string]: number },
+		autoSeller: boolean, -- v6 : comptoir de vente automatique installé (machine : perdu au rebirth)
+	},
+	automation: { -- v6 : réglages du joueur (jamais réinitialisés) et statistiques de production automatique
+		dronesEnabled: boolean,
+		autoSellEnabled: boolean,
+		autoSellThreshold: number, -- % de la capacité du sac (AutomationConfig.Thresholds)
+		stats: AutomationStats,
+	},
+	offline: { -- v7 : production hors ligne (Phase 5, jalon D ; jamais réinitialisé)
+		settledAt: number, -- horodatage serveur jusqu'auquel l'absence a été comptée (0 = jamais) : idempotence
+		report: OfflineReport, -- dernier bilan « Pendant ton absence »
+		totalSeconds: number, -- secondes d'absence prises en compte au total
+		totalCoins: BigNum, -- Coins gagnés hors ligne au total
 	},
 	progression: {
 		rebirths: number, -- rebirths depuis le dernier prestige (n des seuils, R du multiplicateur)
@@ -87,6 +100,39 @@ export type PlayerData = {
 		lastSeen: number,
 		quarantine: { QuarantineEntry }, -- données retirées par l'assainissement, conservées pour récupération
 	},
+}
+
+-- Statistiques de production automatique (Phase 5, jalon C ; historique, jamais réinitialisé).
+export type AutomationStats = {
+	droneHarvests: number, -- récoltes faites par les drones
+	autoSells: number, -- ventes du comptoir automatique
+	autoSellCoins: BigNum, -- Coins rapportés par le comptoir automatique
+}
+
+-- Bilan de la production hors ligne (Phase 5, jalon D), calculé par le serveur au chargement du profil.
+export type OfflineReport = {
+	at: number, -- horodatage serveur du calcul (0 = aucun bilan)
+	awaySeconds: number, -- absence réelle (dernière sauvegarde -> reconnexion)
+	countedSeconds: number, -- durée prise en compte (≤ GameConfig.Offline.MaxSeconds ; 0 si rien n'a été compté)
+	harvests: number, -- récoltes des drones
+	sales: number, -- ventes du comptoir automatique
+	coins: BigNum, -- Coins gagnés (ventes du comptoir + parts de valeur versées à la récolte)
+	bagAdded: number, -- objets restés dans le sac
+	discoveries: number, -- nouvelles combinaisons du Mutadex
+	levelUps: number, -- niveaux gagnés par les familiers équipés
+	missions: number, -- missions terminées
+	stoppedBagFull: boolean, -- drones arrêtés par un sac plein (sans comptoir actif)
+	reason: string, -- "ok" | "too_short" | "no_drones" | "paused" | "stale_revision"
+	seen: boolean, -- écran affiché et fermé par le joueur
+}
+
+-- Réglages et statistiques d'automatisation répliqués au client (panneau Automatisation).
+export type ClientAutomation = {
+	sellerOwned: boolean,
+	dronesEnabled: boolean,
+	autoSellEnabled: boolean,
+	autoSellThreshold: number,
+	stats: AutomationStats,
 }
 
 -- Entrée du Mutadex : première découverte (horodatage serveur Unix) et nombre de récoltes de la combinaison.
@@ -166,12 +212,20 @@ export type ClientState = {
 	revision: number,
 	cycleCoins: BigNum,
 	prestigeCoins: BigNum,
-	upgrades: { rebirth: { [string]: number }, permanent: { [string]: number } }, -- niveaux (panneau Améliorations)
+	upgrades: { -- niveaux (panneau Améliorations)
+		normal: { [string]: number },
+		rebirth: { [string]: number },
+		permanent: { [string]: number },
+	},
 	mutadex: { [ItemKey]: MutadexEntry },
 	mutadexRewards: { [string]: number },
 	pets: ClientPets,
 	quests: { daily: QuestBoard, weekly: QuestBoard },
 	boosts: { [string]: number },
+	automation: ClientAutomation,
+	offline: { report: OfflineReport, totalSeconds: number, totalCoins: BigNum }, -- écran « Pendant ton absence »
+	drones: { [string]: number }, -- drones possédés par type (panneau Automatisation)
+	plots: { [string]: boolean }, -- parcelles possédées (débits du panneau Automatisation)
 	harvests: number,
 	perfectHarvests: number,
 }

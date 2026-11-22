@@ -111,7 +111,20 @@ L'ancien contrat Phase 5 (coût `5·10⁷ × 6ⁿ`, multiplicateur `1,5ⁿ`, Reb
     grâce inchangé (`Upgrades.spec`).
 14. Rythme mesuré par le simulateur (`EconomySim.spec`) : premier rebirth en 8–25 min (actif), 10–30 min (hybride),
     15–45 min (automatisé) ; premier prestige en 1 h 30 – 5 h ; cycle suivant plus court mais ≥ 3 min ; aucune
-    amélioration Essence de niveau 1 ne réduit le revenu (≥ −1 %) ; Valeur de vente ≥ +8 %.
+    amélioration Essence de niveau 1 ne réduit le revenu (≥ −1 %) ; Valeur de vente ≥ +8 %. Depuis la Phase 5, les
+    profils achètent les extensions de ferme (§12) : ces bornes sont mesurées extensions comprises.
+15. Extensions de ferme (Phase 5) : achetées dans l'ordre, prix strictement croissants, débit et déblocage
+    indissociables (`Expansions.spec`) ; une extension augmente le revenu dès que les récolteurs (joueur, drones) ne
+    sont plus saturés par les cases existantes (Maïs et au-delà, `EconomySim.spec`).
+16. Améliorations normales (Phase 5) : payées en Coins sans solde négatif, remises à zéro au rebirth et au prestige,
+    exclues de l'aperçu du rebirth (`NormalUpgrades.spec`) ; aucune ne réduit le revenu au niveau 1 (≥ −1 %) et
+    Récoltes de qualité l'augmente d'au moins 5 % (`EconomySim.spec`).
+17. Comptoir automatique (Phase 5) : même valeur que le marché, jamais deux ventes du même objet (manuelle et
+    automatique, dans les deux ordres), perdu au rebirth (`Automation.spec`) ; drones seuls, il rapporte au moins
+    autant que des ventes manuelles toutes les 2 min (`EconomySim.spec`).
+18. Production hors ligne (Phase 5) : au plus 7 200 s comptées par absence, rien sous 60 s, chaque période comptée
+    une seule fois (reconnexions répétées, sauvegarde puis rechargement), aucun gain d'un horodatage futur ou d'une
+    révision périmée, mêmes récoltes que la boucle des drones en ligne (±2 %) (`Offline.spec`).
 
 ## 6. Grands nombres
 
@@ -131,7 +144,7 @@ Paramètres par type (`src/shared/Config/DroneConfig.luau`) et globaux (`GameCon
 | `maxOwned` | 3 | exemplaires par joueur |
 | `interval` | 4 s | délai entre deux actions d'un drone |
 | `capacity` | 1 | plantes récoltées par action |
-| `range` | 25 studs | portée horizontale autour de son point d'attente (couvre la parcelle principale, pas les extensions) |
+| `range` | 55 studs | portée horizontale autour de son point d'attente : toute la ferme, extensions comprises (Phase 5 ; 25 studs avant, parcelle principale seulement) |
 | `graceDelay` | 5 s | délai de grâce : un drone ne vise une plante que 5 s après sa maturité (fenêtres Parfait/Bien laissées au joueur ; invariant `graceDelay ≥ GoodWindow`) |
 | `TickInterval` | 0,25 s | cadence de l'unique boucle serveur des drones |
 | `BagFullNoticeInterval` | 30 s | « Tes drones attendent : sac plein » au plus une fois par 30 s |
@@ -191,6 +204,12 @@ tools/bin/lune.exe run tests/run.luau report
 (profil 4 poursuivi). Tous débloquent la graine suivante dès qu'elle est payable et vont vendre dès que le sac est
 plein ou que son contenu paie leur prochain achat. **Chaque valeur est la moyenne de 8 parties** (graines 1 à 8) :
 une partie seule est trop sensible aux mutations rares et à l'instant des déblocages.
+
+**Phase 5** : les tables A à G ci-dessous ont été mesurées en fin de Phase 4, **sans** extensions de ferme ni
+améliorations normales ni comptoir (`tools/bin/lune.exe run tests/run.luau report`). Depuis la Phase 5, les profils
+achètent les extensions utiles et le profil avancé achète aussi les améliorations normales : premier rebirth
+inchangé (aucune extension n'est payable avant), premier prestige ≈ **1 h 44** au lieu de 2 h 37 — mesures et
+comparaisons dans les §12 à §15 (`report phase5`).
 
 **Évolutions du modèle (Phase 4)**, rendues nécessaires par le Mutadex (ses places de sac modifiaient le rythme des
 ventes et faisaient apparaître des artefacts) — les tables ci-dessous ont été **remesurées avec ce modèle en fin de
@@ -355,3 +374,154 @@ Constats :
   Rosée chanceuse (chance × 1,5 à la plantation, 15 min), plafonnée avec tout le reste à 5.
 - Les Coins de mission comptent comme gagnés : ils avancent le rebirth (≈ 15 % du premier seuil pour les trois
   quotidiennes d'un joueur neuf).
+
+## 12. Extensions de ferme (Phase 5, jalon A ; détail : `docs/FARM.md`)
+
+Parcelles de `FarmLayout` achetées en Coins (`src/shared/Config/ExpansionConfig.luau`), **dans l'ordre**, conservées
+au rebirth et réinitialisées au prestige :
+
+| Extension | Parcelle | Cases | Prix | Rôle |
+|---|---|---|---|---|
+| Champ ouest | `west` | +9 (18) | 300 000 | 2ᵉ ou 3ᵉ cycle de rebirth |
+| Champ est | `east` | +9 (27) | 4 000 000 | 4ᵉ–5ᵉ cycle |
+| Terrasse | `terrace` (surélevée, escalier) | +9 (36) | 40 000 000 | objectif des cycles suivant un prestige |
+
+Mesures (`tools/bin/lune.exe run tests/run.luau report phase5`, moyennes de 8 parties) :
+
+### H1. Coins / min selon les parcelles possédées (10 min, sans amélioration)
+
+| Graine | Actif 9 cases | Actif 18 | Actif 36 | 3 drones 9 cases | 3 drones 18 | 3 drones 36 |
+|---|---|---|---|---|---|---|
+| Carotte | 585 | 512 | 512 | 304 | 304 | 304 |
+| Tomate | 2 833 | 2 173 | 2 173 | 1 277 | 1 277 | 1 277 |
+| Maïs | 6 902 | 7 678 | 7 677 | 4 564 | 4 631 | 4 631 |
+| Citrouille | 15 374 | 26 381 | 28 747 | 10 649 | 17 146 | 17 146 |
+| Champi-lune | 31 205 | 56 848 | 89 372 | 24 725 | 45 600 | 57 525 |
+| Fleur-étoile | 65 504 | 121 712 | 208 642 | 52 650 | 104 406 | 180 375 |
+| Fruit du dragon | 186 891 | 276 862 | 441 394 | 166 219 | 261 562 | 428 062 |
+
+Lecture : une extension ne rapporte que si les **récolteurs** (le joueur, ≈ 0,7 récolte/s ; 3 drones, 0,75/s) ne
+sont pas déjà saturés par les cases existantes. Avec la Carotte ou la Tomate, 9 cases suffisent à les occuper : les
+cases en plus n'ajoutent rien (le simulateur récolte la case mûre la plus ancienne et perd des bonus Parfait en
+changeant de parcelle — un vrai joueur peut ignorer les cases en trop ; artefact de stratégie, pas une perte réelle).
+À partir de la Citrouille, chaque parcelle ajoute 60 à 90 % de revenu.
+
+### H2–H3. Effet sur la progression (profils du §8, qui achètent une extension seulement quand elle est utile)
+
+- Premier rebirth : **inchangé** (15,2 / 18,6 / 28,4 min) — aucune extension n'est payable avant.
+- Premier prestige (profil avancé) : **1 h 54** avec extensions, contre 2 h 37 sans (−27 %), toujours dans la cible
+  1 h 30 – 5 h (invariant 14). Champ ouest acheté vers 58 min (3ᵉ cycle), Champ est vers 1 h 47 (5ᵉ cycle), Terrasse
+  jamais avant le premier prestige.
+- Durée des cycles avec extensions : 16,6 → 20,9 → 24,9 → 23,8 → 28,2 min (le 4ᵉ profite du Champ ouest ; la
+  croissance ×3,2 des seuils reprend ensuite).
+
+Réglage retenu après trois essais (même rapport) :
+
+| Prix (ouest / est / terrasse) | Premier prestige | Cycles 1 → 5 |
+|---|---|---|
+| 30 000 / 200 000 / 1 200 000 | 1 h 25 (sous la cible) | 17 → 14 → 14 → 20 → 20 min (aplatis) |
+| 150 000 / 1 500 000 / 12 000 000 | 1 h 38 | 17 → 19 → 18 → 22 → 23 min |
+| **300 000 / 4 000 000 / 40 000 000** | **1 h 54** | 17 → 21 → 25 → 24 → 28 min |
+
+Décisions : doubler les cases double presque le revenu des graines lentes ; l'extension étant conservée entre les
+rebirths, un prix bas aplatissait les cycles. Les prix sont d'environ 1 à 4 seuils de rebirth du moment où l'achat
+devient utile. Constat du simulateur : acheter une extension quand ses récolteurs sont saturés **retarde** la graine
+suivante (un profil automatisé perdait jusqu'à −7 %) ; les profils simulés n'achètent donc une extension que lorsque
+la production des cases possédées est inférieure à leur capacité de récolte.
+
+## 13. Améliorations normales (Phase 5, jalon B ; catalogue : `docs/PROGRESSION.md` §4)
+
+Arbre « Coins » (`upgrades.normal`) : Arrosage rapide (−3 % de pousse/niv., 10 niv., ⌈4 000 × 2^L⌉), Récoltes de
+qualité (+5 % de revenu/niv., 10 niv., ⌈2 500 × 1,9^L⌉), Grand sac (+10 places/niv., 5 niv., ⌈1 500 × 2,2^L⌉).
+Perdu à chaque rebirth : ces améliorations accélèrent **le cycle en cours** (surtout son début, quand les graines
+lentes ne sont pas encore débloquées) et se rachètent ensuite.
+
+Mesures (`report phase5`, moyennes de 8 parties ; joueur simulé : achète la moins chère dès qu'elle coûte au plus
+20 % de son solde, Grand sac seulement s'il a des drones) :
+
+| Mesure | Sans | Avec |
+|---|---|---|
+| Premier rebirth, actif | 15,2 min | 14,9 min (3,9 niveaux) |
+| Premier rebirth, hybride | 18,6 min | 18,9 min (5,1 niveaux) |
+| Premier rebirth, automatisé | 28,4 min | 29,6 min (5,9 niveaux) |
+| Premier prestige, avancé (extensions comprises) | 1 h 54 | **1 h 44** (71 niveaux achetés sur 5 cycles) |
+
+Rentabilité — revenu sur 20 min après le rebirth n° 1 avec un niveau donné (référence : 15 572 / 11 181 / 4 376
+Coins/min) :
+
+| Amélioration | Niveau | Coût total | Actif | Hybride | Automatisé |
+|---|---|---|---|---|---|
+| Arrosage rapide | 1 | 4 000 | +0,6 % | +2,9 % | −0,0 % |
+| Arrosage rapide | 5 | 124 000 | +36,2 % | +17,9 % | +7,7 % |
+| Récoltes de qualité | 1 | 2 500 | +13,4 % | +6,8 % | +34,6 % |
+| Récoltes de qualité | 5 | 66 004 | +67,9 % | +37,2 % | +85,8 % |
+| Grand sac | 1 | 1 500 | +0,0 % | +1,8 % | +13,1 % |
+| Grand sac | 5 | 63 171 | +0,0 % | +1,8 % | +26,8 % |
+
+Lecture : comme pour l'Essence, l'effet dépasse l'effet direct (graines débloquées plus tôt). Récoltes de qualité
+est la plus rentable pour tous ; Grand sac ne sert qu'aux joueurs absents ou automatisés (un joueur présent vend
+par habitude) ; Arrosage rapide devient intéressant en quelques niveaux. Au premier rebirth, acheter ces
+améliorations retarde un peu la graine suivante : l'effet est neutre (±1 min) ; il devient net sur les cycles
+suivants, où le revenu permet plus de niveaux (premier prestige −9 %). Les plafonds globaux restent ceux du §9
+(pousse ≥ 40 %, testé tous arbres au maximum).
+
+## 14. Automatisation : comptoir de vente automatique (Phase 5, jalon C ; détail : `docs/AUTOMATION.md`)
+
+Comptoir à **5 000 Coins** (machine du cycle, perdue au rebirth), seuil 50 / 75 / 100 % du sac, vente par la **même
+règle** que le marché (aucune valeur créée, aucune attribution double). Mesures (`report phase5`, moyennes de 8
+parties) :
+
+### J1. Premier rebirth, profil principalement automatisé
+
+| Profil | Premier rebirth | Ventes du comptoir |
+|---|---|---|
+| 3. Automatisé, ventes manuelles toutes les 2 min | 28,4 min | — |
+| 3 bis. Automatisé + comptoir (aucun aller-retour après l'achat) | 28,5 min | 7,4 |
+
+### J2. Trois drones seuls, 10 min (Coins/min) : qui vend le sac ?
+
+| Graine | Personne (drones arrêtés sac plein) | Ventes toutes les 2 min | Comptoir à 100 % | Comptoir à 50 % |
+|---|---|---|---|---|
+| Carotte | 55 | 304 | 653 | 653 |
+| Tomate | 298 | 1 277 | 1 960 | 1 960 |
+| Citrouille | 3 176 | 10 649 | 10 649 | 10 649 |
+| Champi-lune | 12 800 | 24 725 | 24 725 | 24 725 |
+
+### J3. Profil avancé (actif) : premier prestige 1 h 44 sans comptoir, 1 h 47 avec
+
+Lecture :
+- Le comptoir ne rend pas le jeu plus rapide pour qui vend déjà régulièrement (J1, J3 : ±3 %, coût de 5 000 Coins
+  à racheter à chaque cycle). Il **évite que les drones s'arrêtent** quand personne ne vend : avec les graines
+  rapides, trois drones remplissent un sac de 40 en moins d'une minute ; le comptoir double alors le revenu des
+  drones seuls (Carotte ×2,1, Tomate ×1,5). Avec les graines lentes, le sac ne se remplit pas entre deux passages :
+  aucun effet.
+- Le seuil (50 ou 100 %) ne change pas le revenu (même règle de vente) ; il règle seulement la fréquence des ventes
+  et la place laissée libre pour les récoltes manuelles.
+- Le comptoir est la condition d'une production hors ligne au-delà d'un sac plein (§15).
+
+## 15. Production hors ligne (Phase 5, jalon D ; modèle et écarts : `docs/AUTOMATION.md` §8)
+
+Plafond **2 h** (`GameConfig.Offline.MaxSeconds = 7200`), seulement par les drones actifs (et le comptoir s'il est
+installé) ; absence de moins de 60 s : rien. Mesures (`report phase5`, section K : 3 drones, 18 cases, absence de
+2 h, cultures plantées à la déconnexion ; « en ligne simulé » = même ferme rejouée au pas de 0,25 s) :
+
+| Graine | Sans comptoir : valeur du sac plein | Hors ligne avec comptoir (Coins) | En ligne simulé, comptoir | Écart | Calcul (ms, Lune) |
+|---|---|---|---|---|---|
+| Carotte | 450 | 80 560 | 80 285 | +0,3 % | 287 |
+| Tomate | 2 025 | 362 520 | 360 922 | +0,4 % | 237 |
+| Citrouille | 24 750 | 2 674 100 | 2 681 800 | −0,3 % | 149 |
+| Champi-lune | 90 000 | 6 105 000 | 5 813 000 | +5,0 % | 110 |
+| Fleur-étoile | 292 500 | 13 029 250 | 12 957 750 | +0,6 % | 63 |
+
+Lecture :
+- Le modèle rejoue exactement les règles en ligne : la production hors ligne égale celle d'une session où le joueur
+  laisse ses drones et son comptoir travailler seuls (écarts de ±0,5 %, jusqu'à 5 % avec les graines lentes où
+  quelques mutations rares pèsent lourd ; le dernier lot non vendu reste dans le sac).
+- Sans comptoir, l'absence ne rapporte qu'un sac plein (40 à 140 objets, vendus au retour) : le comptoir est la
+  condition d'une vraie production hors ligne, ce qui lui donne son intérêt pour les joueurs qui jouent peu.
+- 2 h d'absence valent au plus 2 h de production automatisée d'une session active, jamais plus : se déconnecter
+  n'est jamais plus rentable que rester connecté, et rester connecté avec un joueur présent rapporte davantage
+  (bonus de précision, événements, ventes manuelles).
+- Coût : pire cas mesuré (3 drones à l'intervalle minimal, 36 cases de Carotte, comptoir) ≈ 9 000 récoltes en
+  ≈ 360 ms (Lune) ; sur le serveur, le calcul se fait au chargement du profil, avant qu'il ne devienne actif, avec
+  une pause toutes les 500 actions de drone (aucun blocage du serveur).

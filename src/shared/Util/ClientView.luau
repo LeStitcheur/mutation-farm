@@ -22,7 +22,11 @@ function ClientView.build(data: Types.PlayerData): Types.ClientState
 		revision = data.progression.revision,
 		cycleCoins = data.progression.cycleCoins,
 		prestigeCoins = data.progression.prestigeCoins,
-		upgrades = { rebirth = data.upgrades.rebirth, permanent = data.upgrades.permanent },
+		upgrades = {
+			normal = data.upgrades.normal,
+			rebirth = data.upgrades.rebirth,
+			permanent = data.upgrades.permanent,
+		},
 		mutadex = data.mutadex,
 		mutadexRewards = data.mutadexRewards,
 		pets = {
@@ -33,6 +37,20 @@ function ClientView.build(data: Types.PlayerData): Types.ClientState
 		},
 		quests = { daily = data.quests.daily, weekly = data.quests.weekly },
 		boosts = data.boosts,
+		automation = {
+			sellerOwned = data.machines.autoSeller == true,
+			dronesEnabled = data.automation.dronesEnabled,
+			autoSellEnabled = data.automation.autoSellEnabled,
+			autoSellThreshold = data.automation.autoSellThreshold,
+			stats = data.automation.stats,
+		},
+		offline = {
+			report = data.offline.report,
+			totalSeconds = data.offline.totalSeconds,
+			totalCoins = data.offline.totalCoins,
+		},
+		drones = data.machines.drones,
+		plots = data.farm.plots,
 		harvests = data.stats.harvests,
 		perfectHarvests = data.stats.perfectHarvests,
 	}

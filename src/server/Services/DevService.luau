@@ -11,6 +11,8 @@
 --   Invoke("startEvent", userId, eventId, duration?) : force un événement du monde maintenant (tests du jalon C)
 --   Invoke("stopEvent", userId)           : arrête l'événement forcé
 --   Invoke("questRecord", userId, objective, amount) : fait progresser un objectif de mission (tests du jalon D)
+--   Invoke("offlineSimulate", userId, seconds) : absence SIMULÉE de `seconds` sur le profil en jeu (Phase 5, jalon D :
+--                                           même règle pure que le chargement, horodatage reculé)
 -- API : aucune.
 
 local HttpService = game:GetService("HttpService")
@@ -26,6 +28,7 @@ local EconomyService = require(script.Parent.EconomyService)
 local EventService = require(script.Parent.EventService)
 local PetService = require(script.Parent.PetService)
 local QuestService = require(script.Parent.QuestService)
+local OfflineService = require(script.Parent.OfflineService)
 
 local MAX_GRANT = 1e15
 
@@ -80,6 +83,12 @@ local function invoke(command: unknown, userId: unknown, amount: unknown, extra:
 			return false
 		end
 		return QuestService.Record(player, amount, math.floor(extra))
+	elseif command == "offlineSimulate" then
+		if type(amount) ~= "number" or amount ~= amount or amount < 0 or amount > 7 * 86400 then
+			return false
+		end
+		local report = OfflineService.SettleLive(player, amount)
+		return if report then HttpService:JSONEncode(report) else false
 	end
 	return nil
 end

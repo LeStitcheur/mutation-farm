@@ -171,8 +171,11 @@ end
 
 -- Rapport du simulateur économique : `lune run tests/run.luau report` ---------------------------
 
+-- `report phase5` : mesures d'équilibrage de la Phase 5 (extensions, améliorations normales, automatisation, hors
+-- ligne) ; `report` seul : rapport des phases 3–4.
 if process.args[1] == "report" then
-	local report = vrequire(rawget(rawget(services.TestService, "__children").Sim, "__children").Report)
+	local sims = rawget(rawget(services.TestService, "__children").Sim, "__children")
+	local report = vrequire(if process.args[2] == "phase5" then sims.Phase5Report else sims.Report)
 	report()
 	process.exit(0)
 end

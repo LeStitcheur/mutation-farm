@@ -19,7 +19,7 @@ local list: { DroneDef } = {
 		maxOwned = 3,
 		interval = 4,
 		capacity = 1,
-		range = 25, -- couvre la parcelle principale depuis n'importe quel point d'attente
+		range = 55, -- couvre toute la ferme, extensions comprises, depuis n'importe quel point d'attente (testé)
 		graceDelay = 5, -- = fenêtre « Bien » : le joueur garde ses chances de Parfait/Bien (docs/ECONOMY.md §7)
 		color = "#4FC3F7",
 	},

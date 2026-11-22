@@ -90,8 +90,15 @@ local function refreshAction(visual: Visual)
 	visual.actionAt = if type(actionAt) == "number" then actionAt else 0
 end
 
+-- Bulle d'état : « Sac plein ! » (rouge) ou « En pause » (gris, drones coupés dans le panneau Automatisation).
 local function refreshStatus(visual: Visual)
-	visual.label.Enabled = visual.anchor:GetAttribute("Status") == "bag_full"
+	local status = visual.anchor:GetAttribute("Status")
+	local text = visual.label:FindFirstChildOfClass("TextLabel")
+	visual.label.Enabled = status == "bag_full" or status == "paused"
+	if text then
+		text.Text = if status == "paused" then "En pause" else "Sac plein !"
+		text.TextColor3 = if status == "paused" then Color3.fromRGB(176, 190, 197) else Color3.fromRGB(239, 83, 80)
+	end
 end
 
 local function build(anchor: BasePart): Visual

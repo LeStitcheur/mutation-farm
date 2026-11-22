@@ -1,20 +1,23 @@
 --!strict
 -- EconomyService — Coins et vente du sac. Point de passage unique pour créditer/débiter des Coins.
--- API : AddCoins, TrySpendCoins, SellAll.
+-- Vente au marché (SellAll) et vente automatique du comptoir (AutoSell, Phase 5) : même règle pure Selling.sellBag.
+-- API : AddCoins, TrySpendCoins, SellAll, AutoSell.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage.Shared
+local AutomationConfig = require(Shared.Config.AutomationConfig)
 local GameConfig = require(Shared.Config.GameConfig)
 local Types = require(Shared.Types)
+local Automation = require(Shared.Util.Automation)
 local BigNum = require(Shared.Util.BigNum)
 local Economy = require(Shared.Util.Economy)
 local Format = require(Shared.Util.Format)
 local Inventory = require(Shared.Util.Inventory)
 local ProgressionMath = require(Shared.Util.ProgressionMath)
-local Quests = require(Shared.Util.Quests)
+local Selling = require(Shared.Util.Selling)
 local DataService = require(script.Parent.DataService)
 local Notifier = require(script.Parent.Parent.Infra.Notifier)
 local QuestNotifier = require(script.Parent.Parent.Infra.QuestNotifier)
@@ -44,10 +47,7 @@ function EconomyService.TrySpendCoins(player: Player, amount: BigNum): boolean
 	end
 	local spent = false
 	DataService.Update(player, function(data)
-		if BigNum.gte(data.currencies.coins, amount) then
-			data.currencies.coins = BigNum.sub(data.currencies.coins, amount)
-			spent = true
-		end
+		spent = Economy.trySpend(data, amount)
 	end)
 	return spent
 end
@@ -70,20 +70,47 @@ function EconomyService.SellAll(player: Player): BigNum?
 		Notifier.sendThrottled(player, "bag_empty", 2, "info", "Ton sac est vide : récolte des plantes mûres !")
 		return nil
 	end
-	-- Total calculé DANS le mutateur (sac et multiplicateur lus dans le même état atomique, même face à un rebirth).
-	local total = BigNum.zero()
-	local completed: { Types.Mission } = {}
+	-- Total calculé DANS le mutateur (sac et multiplicateur lus dans le même état atomique, même face à un rebirth) ;
+	-- même règle que le comptoir automatique (Selling.sellBag) : une vente concurrente trouve le sac vide.
+	local sale: Selling.SaleOutcome? = nil
 	DataService.Update(player, function(d)
-		total = Economy.sellValue(d.bag.items, ProgressionMath.incomeMultiplier(d))
-		d.currencies.coins = BigNum.add(d.currencies.coins, total)
-		ProgressionMath.recordEarnings(d, total)
-		d.stats.sells += 1
-		d.bag.items = {}
-		completed = Quests.record(d, "sell", 1, Workspace:GetServerTimeNow())
+		sale = Selling.sellBag(d, Workspace:GetServerTimeNow(), "manual")
 	end)
-	Notifier.send(player, "success", string.format("%d récolte(s) vendue(s) : +%s Coins", count, Format.bigNum(total)))
-	QuestNotifier.completed(player, completed)
-	return total
+	local result = sale
+	if not result then
+		return nil
+	end
+	Notifier.send(
+		player,
+		"success",
+		string.format("%d récolte(s) vendue(s) : +%s Coins", result.count, Format.bigNum(result.total))
+	)
+	QuestNotifier.completed(player, result.questsCompleted)
+	return result.total
+end
+
+-- Vente automatique (Phase 5, comptoir) : vend le sac si le comptoir est installé, activé et le seuil atteint.
+-- Appelée après chaque récolte (joueur ou drone) et après un changement de réglage. Retourne le montant crédité.
+function EconomyService.AutoSell(player: Player): BigNum?
+	if not DataService.GetData(player) then
+		return nil
+	end
+	local sale: Selling.SaleOutcome? = nil
+	DataService.Update(player, function(d)
+		sale = Automation.autoSell(d, Workspace:GetServerTimeNow())
+	end)
+	local result = sale
+	if not result then
+		return nil
+	end
+	Notifier.sendThrottled(
+		player,
+		"auto_sell",
+		AutomationConfig.SaleNoticeInterval,
+		"success",
+		string.format("Vente automatique : %d récolte(s), +%s Coins", result.count, Format.bigNum(result.total))
+	)
+	return result.total
 end
 
 function EconomyService.Init()
